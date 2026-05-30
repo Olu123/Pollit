@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Menu, X, BarChart2, LogOut, Star, Plus } from 'lucide-react'
+import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 
@@ -80,9 +80,13 @@ export default function Navbar() {
                   <span>{profile.points.toLocaleString()} tokens</span>
                 </div>
               )}
-              <span className="text-sm font-medium text-foreground max-w-[120px] truncate">
+              <Link
+                href="/profile"
+                className="text-sm font-medium text-foreground max-w-[120px] truncate hover:text-primary transition-colors"
+                title="View profile"
+              >
                 {displayName}
-              </span>
+              </Link>
               <button
                 onClick={signOut}
                 className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -157,6 +161,17 @@ export default function Navbar() {
                   <span className="font-semibold text-foreground">{displayName}</span>
                 </p>
               )}
+              <Link
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-2.5 text-sm font-medium px-3 py-3.5 rounded-xl transition-colors ${
+                  pathname === '/profile'
+                    ? 'text-primary bg-primary-light'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                <UserIcon size={15} /> Profile
+              </Link>
               <button
                 onClick={() => { signOut(); setOpen(false) }}
                 className="flex items-center gap-2.5 text-sm font-medium px-3 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left w-full"

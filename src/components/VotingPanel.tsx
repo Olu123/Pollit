@@ -75,7 +75,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const loadComments = useCallback(async () => {
     const { data } = await supabase
       .from('votes')
-      .select('id, comment, created_at, profile:profiles!user_id ( username, full_name )')
+      .select('id, comment, created_at, profile:profiles!user_id ( username )')
       .eq('poll_id', poll.id)
       .not('comment', 'is', null)
       .order('created_at', { ascending: false })
@@ -89,7 +89,6 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         comment: row.comment,
         created_at: row.created_at,
         username: prof?.username ?? null,
-        full_name: prof?.full_name ?? null,
       }
     })
     setComments(mapped)
@@ -381,20 +380,20 @@ function CommentsFeed({ comments }: { comments: PollComment[] }) {
       ) : (
       <div className="flex flex-col gap-4">
         {comments.map((c) => {
-          const name = c.username ?? c.full_name ?? 'Anonymous'
-          const initial = name.charAt(0).toUpperCase()
+          const handle  = c.username ? `@${c.username}` : 'Anonymous'
+          const initials = c.username ? c.username.slice(0, 2).toUpperCase() : '?'
           return (
             <div key={c.id} className="flex gap-2.5">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
-                style={{ backgroundColor: avatarColor(name) }}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 select-none"
+                style={{ backgroundColor: avatarColor(c.username ?? c.id) }}
                 aria-hidden="true"
               >
-                {initial}
+                {initials}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground truncate">{name}</span>
+                  <span className="text-sm font-semibold text-foreground truncate">{handle}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{timeAgo(c.created_at)}</span>
                 </div>
                 <p className="text-sm text-foreground/80 leading-snug break-words mt-0.5">

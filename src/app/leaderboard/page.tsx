@@ -11,8 +11,6 @@ type TabKey = 'overall' | 'voters' | 'creators'
 interface LeaderboardEntry {
   id: string
   username: string | null
-  full_name: string | null
-  avatar_url: string | null
   points: number
   votes_cast: number
   polls_created: number
@@ -37,13 +35,9 @@ function avatarColor(id: string): string {
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length]
 }
 
-function getInitials(username: string | null, fullName: string | null): string {
-  const name = (fullName ?? username ?? '').trim()
-  if (!name) return '?'
-  const parts = name.split(/\s+/)
-  return parts.length >= 2
-    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase()
+function getInitials(username: string | null): string {
+  if (!username) return '?'
+  return username.slice(0, 2).toUpperCase()
 }
 
 function sortEntries(entries: LeaderboardEntry[], tab: TabKey): LeaderboardEntry[] {
@@ -63,7 +57,7 @@ function fmtNum(n: number): string {
 async function getLeaderboardData(): Promise<LeaderboardEntry[]> {
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, avatar_url, points')
+    .select('id, username, points')
     .gt('points', 0)
     .order('points', { ascending: false })
     .limit(50)
@@ -195,10 +189,9 @@ function LeaderboardRow({
 }) {
   const medal      = rank <= 3 ? MEDAL[rank - 1] : null
   const accentBorder = RANK_BORDER[rank] ?? ''
-  const displayName = entry.username ?? entry.full_name ?? 'Anonymous'
-  const subtitle    = entry.full_name && entry.full_name !== entry.username ? entry.full_name : null
+  const displayName = entry.username ? `@${entry.username}` : 'Anonymous'
   const bg          = avatarColor(entry.id)
-  const initials    = getInitials(entry.username, entry.full_name)
+  const initials    = getInitials(entry.username)
 
   return (
     <div
@@ -227,9 +220,6 @@ function LeaderboardRow({
         <p className="font-bold text-foreground text-sm truncate leading-tight">
           {displayName}
         </p>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground truncate leading-tight">{subtitle}</p>
-        )}
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           <span className={`flex items-center gap-1 ${tab === 'voters' ? 'text-primary font-semibold' : ''}`}>
             <CheckSquare size={11} strokeWidth={2} />

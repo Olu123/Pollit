@@ -11,6 +11,12 @@ export interface Profile {
   full_name: string | null
   avatar_url: string | null
   points: number
+  phone: string | null
+  age_range: string | null
+  sex: string | null
+  birth_month: number | null
+  birth_day: number | null
+  bio: string | null
   created_at: string
   updated_at: string
 }
@@ -49,5 +55,4 @@ export interface PollComment {
   comment: string
   created_at: string
   username: string | null
-  full_name: string | null
 }

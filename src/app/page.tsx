@@ -16,7 +16,7 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
     .from('polls')
     .select(`
       id, question, category, created_by, expires_at, total_votes, created_at,
-      profile:profiles!created_by ( id, username, full_name, avatar_url, points, created_at, updated_at ),
+      profile:profiles!created_by ( id, username, avatar_url ),
       options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
     `)
     .order('created_at', { ascending: false })

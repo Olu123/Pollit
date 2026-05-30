@@ -11,9 +11,23 @@ create table if not exists public.profiles (
   full_name   text,
   avatar_url  text,
   points      integer not null default 0,
+  phone       text,
+  age_range   text,
+  sex         text,
+  birth_month integer,
+  birth_day   integer,
+  bio         text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- For existing databases: add the profile detail columns.
+alter table public.profiles add column if not exists phone       text;
+alter table public.profiles add column if not exists age_range   text;
+alter table public.profiles add column if not exists sex         text;
+alter table public.profiles add column if not exists birth_month integer;
+alter table public.profiles add column if not exists birth_day   integer;
+alter table public.profiles add column if not exists bio         text;
 
 create table if not exists public.polls (
   id          uuid default gen_random_uuid() primary key,
