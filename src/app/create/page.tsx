@@ -3,13 +3,21 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, Users2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 
 const HOT_TAKE_MIN_TOKENS = 100
+
+function genCommunityCode() {
+  const letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ'
+  const alnum = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  const pick = (set: string, n: number) =>
+    Array.from({ length: n }, () => set[Math.floor(Math.random() * set.length)]).join('')
+  return `${pick(letters, 3)}-${pick(alnum, 3)}`
+}
 
 const CATEGORIES: PollCategory[] = [
   'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle',
@@ -42,10 +50,22 @@ export default function CreatePollPage() {
   const [options, setOptions]   = useState(['', ''])
   const [expiryDays, setExpiry] = useState(7)
   const [isHotTake, setHotTake] = useState(false)
+  const [isCommunity, setCommunity] = useState(false)
+  const [communityName, setCommunityName] = useState('')
+  const [communityCode, setCommunityCode] = useState('')
+  const [communityPassword, setCommunityPassword] = useState('')
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
+
+  function toggleCommunity() {
+    setCommunity((v) => {
+      const next = !v
+      if (next && !communityCode) setCommunityCode(genCommunityCode())
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
@@ -79,11 +99,20 @@ export default function CreatePollPage() {
       p_category:    category,
       p_options:     trimmed,
       p_expires_at:  expiresAt,
-      p_is_hot_take: canHotTake && isHotTake,
+      p_is_hot_take: canHotTake && isHotTake && !isCommunity,
+      p_is_community: isCommunity,
+      p_community_name: isCommunity ? communityName.trim() || null : null,
+      p_community_code: isCommunity ? communityCode : null,
+      p_community_password: isCommunity ? communityPassword.trim() || null : null,
     })
 
     if (rpcError) { setError(rpcError.message); setBusy(false); return }
-    router.push(`/polls/${pollId}`)
+    // Community polls open straight to their gated link with the code.
+    if (isCommunity && communityCode) {
+      router.push(`/polls/${pollId}?code=${communityCode}`)
+    } else {
+      router.push(`/polls/${pollId}`)
+    }
   }
 
   const filledOptions = options.map((o) => o.trim()).filter(Boolean)
@@ -164,6 +193,70 @@ export default function CreatePollPage() {
             </span>
           </button>
         )}
+
+        {/* Community poll toggle */}
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={toggleCommunity}
+            aria-pressed={isCommunity}
+            className={`flex items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+              isCommunity ? 'border-primary bg-primary-light/40' : 'border-border hover:border-primary/40'
+            }`}
+          >
+            <div>
+              <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <Users2 size={15} /> Make this a Community Poll 🏘️
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Private — only people with the invite code can vote.</p>
+            </div>
+            <span className={`w-11 h-6 rounded-full p-0.5 shrink-0 transition-colors ${isCommunity ? 'bg-primary' : 'bg-muted'}`}>
+              <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isCommunity ? 'translate-x-5' : ''}`} />
+            </span>
+          </button>
+
+          {isCommunity && (
+            <div className="flex flex-col gap-3 pl-1">
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-1.5">Community name</label>
+                <input
+                  type="text"
+                  value={communityName}
+                  onChange={(e) => setCommunityName(e.target.value)}
+                  placeholder="e.g. Lagos Landlords Association"
+                  maxLength={80}
+                  className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground min-h-[44px]"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 bg-muted rounded-xl px-4 py-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Invite code</p>
+                  <p className="text-lg font-black tracking-wider text-foreground">{communityCode}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCommunityCode(genCommunityCode())}
+                  className="text-xs font-semibold text-primary hover:text-primary-dark px-3 min-h-[40px] rounded-full hover:bg-primary-light transition-colors"
+                >
+                  Regenerate
+                </button>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-foreground mb-1.5">
+                  Password <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={communityPassword}
+                  onChange={(e) => setCommunityPassword(e.target.value)}
+                  placeholder="Leave blank for no password"
+                  maxLength={40}
+                  className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground min-h-[44px]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Options */}
         <div>

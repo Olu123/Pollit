@@ -22,12 +22,15 @@ create table if not exists public.profiles (
 );
 
 -- For existing databases: add the profile detail columns.
-alter table public.profiles add column if not exists phone       text;
-alter table public.profiles add column if not exists age_range   text;
-alter table public.profiles add column if not exists sex         text;
-alter table public.profiles add column if not exists birth_month integer;
-alter table public.profiles add column if not exists birth_day   integer;
-alter table public.profiles add column if not exists bio         text;
+alter table public.profiles add column if not exists phone           text;
+alter table public.profiles add column if not exists age_range       text;
+alter table public.profiles add column if not exists sex             text;
+alter table public.profiles add column if not exists birth_month     integer;
+alter table public.profiles add column if not exists birth_day       integer;
+alter table public.profiles add column if not exists bio             text;
+alter table public.profiles add column if not exists state_of_origin text;
+alter table public.profiles add column if not exists referred_by     uuid references public.profiles(id);
+alter table public.profiles add column if not exists referral_count  integer default 0;
 
 create table if not exists public.polls (
   id          uuid default gen_random_uuid() primary key,
@@ -37,11 +40,22 @@ create table if not exists public.polls (
   expires_at  timestamptz not null,
   total_votes integer not null default 0,
   is_hot_take boolean not null default false,
+  is_community       boolean not null default false,
+  community_name     text,
+  community_code     text,
+  community_password text,
   created_at  timestamptz not null default now(),
   constraint  polls_category_check check (
     category in ('Politics','Sports','Entertainment','Business','Lifestyle')
   )
 );
+
+-- Community poll columns for existing databases.
+alter table public.polls add column if not exists is_community       boolean default false;
+alter table public.polls add column if not exists community_name     text;
+alter table public.polls add column if not exists community_code     text;
+alter table public.polls add column if not exists community_password text;
+create index if not exists polls_community_code_idx on public.polls(community_code);
 
 create table if not exists public.poll_options (
   id            uuid default gen_random_uuid() primary key,
@@ -58,12 +72,14 @@ create table if not exists public.votes (
   option_id  uuid references public.poll_options(id) on delete cascade not null,
   user_id    uuid references public.profiles(id) on delete cascade not null,
   comment    text,
+  state      text,
   created_at timestamptz not null default now(),
   unique(poll_id, user_id)
 );
 
--- For existing databases: add the optional comment column + length guard.
+-- For existing databases: add the optional comment + state columns.
 alter table public.votes add column if not exists comment text;
+alter table public.votes add column if not exists state   text;
 alter table public.votes drop constraint if exists votes_comment_len;
 alter table public.votes add constraint votes_comment_len
   check (comment is null or char_length(comment) <= 280);
@@ -107,14 +123,16 @@ create policy "votes_insert" on public.votes for insert with check (auth.uid() =
 -- Atomically inserts a vote (with optional comment), increments
 -- counts, awards 10 tokens.
 
--- Drop the old 2-arg signature so PostgREST resolves to the new one.
+-- Drop older signatures so PostgREST resolves to the newest one.
 drop function if exists public.cast_vote(uuid, uuid);
 drop function if exists public.cast_vote(uuid, uuid, text);
+drop function if exists public.cast_vote(uuid, uuid, text, text);
 
 create or replace function public.cast_vote(
   p_poll_id   uuid,
   p_option_id uuid,
-  p_comment   text default null
+  p_comment   text default null,
+  p_state     text default null
 )
 returns jsonb
 language plpgsql security definer set search_path = public
@@ -122,14 +140,15 @@ as $$
 declare
   v_uid     uuid := auth.uid();
   v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if v_comment is not null and char_length(v_comment) > 280 then
     raise exception 'comment_too_long';
   end if;
 
-  insert into votes (poll_id, option_id, user_id, comment)
-  values (p_poll_id, p_option_id, v_uid, v_comment);
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
@@ -147,16 +166,21 @@ $$;
 -- Add the is_hot_take column to existing databases.
 alter table public.polls add column if not exists is_hot_take boolean default false;
 
--- Drop the old 4-arg signature so PostgREST resolves to the new one.
+-- Drop older signatures so PostgREST resolves to the newest one.
 drop function if exists public.create_poll(text, text, text[], timestamptz);
 drop function if exists public.create_poll(text, text, text[], timestamptz, boolean);
+drop function if exists public.create_poll(text, text, text[], timestamptz, boolean, boolean, text, text, text);
 
 create or replace function public.create_poll(
-  p_question   text,
-  p_category   text,
-  p_options    text[],
-  p_expires_at timestamptz,
-  p_is_hot_take boolean default false
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null
 )
 returns uuid
 language plpgsql security definer set search_path = public
@@ -169,8 +193,13 @@ begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
 
-  insert into polls (question, category, created_by, expires_at, is_hot_take)
-  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false))
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          nullif(btrim(p_community_password), ''))
   returning id into v_poll_id;
 
   for v_idx in 1 .. array_length(p_options, 1) loop
@@ -181,6 +210,41 @@ begin
   update profiles set points = points + 30, updated_at = now() where id = v_uid;
 
   return v_poll_id;
+end;
+$$;
+
+-- ── RPC: claim_referral ───────────────────────────────────────
+-- Links the caller to a referrer (once) and awards the referrer 100 tokens.
+-- Security definer so it can update the referrer's row past RLS.
+
+create or replace function public.claim_referral(p_referrer_username text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_ref uuid;
+begin
+  if v_uid is null then return jsonb_build_object('ok', false); end if;
+
+  -- Only link once.
+  if exists (select 1 from profiles where id = v_uid and referred_by is not null) then
+    return jsonb_build_object('ok', false, 'reason', 'already_referred');
+  end if;
+
+  select id into v_ref from profiles where username = p_referrer_username;
+  if v_ref is null or v_ref = v_uid then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_referrer');
+  end if;
+
+  update profiles set referred_by = v_ref where id = v_uid;
+  update profiles
+     set referral_count = coalesce(referral_count, 0) + 1,
+         points = points + 100,
+         updated_at = now()
+   where id = v_ref;
+
+  return jsonb_build_object('ok', true);
 end;
 $$;
 

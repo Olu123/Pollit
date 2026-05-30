@@ -14,6 +14,7 @@ const NAV_LINKS: { href: string; key: StringKey }[] = [
   { href: '/', key: 'nav.home' },
   { href: '/pulse', key: 'nav.pulse' },
   { href: '/leaderboard', key: 'nav.leaderboard' },
+  { href: '/invite', key: 'nav.invite' },
 ]
 
 export default function Navbar() {

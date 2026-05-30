@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
+import MyNigeriaCard from '@/components/MyNigeriaCard'
 import {
   Loader2, Save, Star, BarChart2, CheckSquare, Lock, Mail, CheckCircle2, Pencil, X,
 } from 'lucide-react'
@@ -192,6 +193,9 @@ export default function ProfilePage() {
         <StatCard icon={BarChart2}  label={t('profile.statPolls')}  value={stats.pollsCreated} />
         <StatCard icon={CheckSquare} label={t('profile.statVotes')} value={stats.votesCast} />
       </div>
+
+      {/* My Nigeria shareable card */}
+      <MyNigeriaCard />
 
       {/* Profile details — view / edit toggle */}
       <form onSubmit={handleSave} className="bg-card border border-border rounded-2xl p-4 sm:p-6 flex flex-col gap-5">

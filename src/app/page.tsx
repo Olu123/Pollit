@@ -24,6 +24,7 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
   let query = supabase
     .from('polls')
     .select(POLL_SELECT)
+    .eq('is_community', false)
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -44,6 +45,7 @@ async function getHotTakes(): Promise<Poll[]> {
     .from('polls')
     .select(POLL_SELECT)
     .eq('is_hot_take', true)
+    .eq('is_community', false)
     .order('created_at', { ascending: false })
     .limit(10)
 

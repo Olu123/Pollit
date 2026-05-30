@@ -17,6 +17,9 @@ export interface Profile {
   birth_month: number | null
   birth_day: number | null
   bio: string | null
+  state_of_origin: string | null
+  referred_by: string | null
+  referral_count: number
   created_at: string
   updated_at: string
 }
@@ -37,6 +40,10 @@ export interface Poll {
   expires_at: string
   total_votes: number
   is_hot_take: boolean
+  is_community: boolean
+  community_name: string | null
+  community_code: string | null
+  community_password: string | null
   created_at: string
   profile: Profile | null
   options: PollOption[]
@@ -48,6 +55,7 @@ export interface Vote {
   option_id: string
   user_id: string
   comment: string | null
+  state: string | null
   created_at: string
 }
 

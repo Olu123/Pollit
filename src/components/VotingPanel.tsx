@@ -3,12 +3,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle } from 'lucide-react'
+import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin } from 'lucide-react'
+import confetti from 'canvas-confetti'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
-import Confetti from './Confetti'
 import { enqueueVote } from '@/lib/voteQueue'
+import { NIGERIAN_STATES } from '@/lib/states'
+import { getInsight } from '@/lib/insights'
+import { shareMessages, whatsappHref } from '@/lib/share'
 
 function timeRemaining(expiresAt: string) {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -59,18 +62,25 @@ const CATEGORY_STYLES: Record<string, string> = {
 const MAX_COMMENT = 280
 
 export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
-  const { user } = useAuth()
-  const { t } = useLanguage()
+  const { user, profile } = useAuth()
+  const { t, lang } = useLanguage()
 
   const [poll, setPoll]            = useState(initialPoll)
   const [votedOptionId, setVoted]  = useState<string | null>(null)
   const [votedChecked, setChecked] = useState(false)
   const [selectedId, setSelected]  = useState<string | null>(null)
   const [comment, setComment]      = useState('')
+  const [voteState, setVoteState]  = useState('')
   const [voting, setVoting]        = useState(false)
   const [voteError, setVoteError]  = useState('')
   const [comments, setComments]    = useState<PollComment[]>([])
-  const [confetti, setConfetti]    = useState(false)
+  const [revealing, setRevealing]  = useState(false)
+  const [insight, setInsight]      = useState('')
+
+  // Default the state selector from the user's profile (if set).
+  useEffect(() => {
+    if (profile?.state_of_origin) setVoteState(profile.state_of_origin)
+  }, [profile?.state_of_origin])
 
   const isExpired   = new Date(poll.expires_at).getTime() <= Date.now()
   const showResults = !!votedOptionId || isExpired || !user
@@ -145,22 +155,57 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     return () => { supabase.removeChannel(channel) }
   }, [poll.id, loadComments])
 
+  // Apply the vote to local state and compute the post-vote insight.
   function applyVoted(optionId: string) {
-    setVoted(optionId)
-    setConfetti(true)
+    const newOptions = poll.options.map((o) =>
+      o.id === optionId ? { ...o, vote_count: o.vote_count + 1 } : o
+    )
+    const newTotal = newOptions.reduce((s, o) => s + o.vote_count, 0)
     setPoll((prev) => ({
       ...prev,
       total_votes: prev.total_votes + 1,
-      options: prev.options.map((o) =>
-        o.id === optionId ? { ...o, vote_count: o.vote_count + 1 } : o
-      ),
+      options: newOptions,
     }))
+    setVoted(optionId)
+
+    // Insight
+    const sorted = [...newOptions].sort((a, b) => b.vote_count - a.vote_count)
+    const votedCount = newOptions.find((o) => o.id === optionId)?.vote_count ?? 0
+    const votedPct = newTotal > 0 ? Math.round((votedCount / newTotal) * 100) : 0
+    const topPct = newTotal > 0 ? Math.round((sorted[0].vote_count / newTotal) * 100) : 0
+    const secondPct = sorted[1] && newTotal > 0 ? Math.round((sorted[1].vote_count / newTotal) * 100) : 0
+    setInsight(
+      getInsight({
+        votedPct,
+        topPct,
+        isLandslide: topPct > 70,
+        isClose: sorted.length >= 2 && topPct - secondPct <= 10,
+        stateDiffers: false,
+        state: voteState || null,
+      }, lang)
+    )
+  }
+
+  // The "Omo, see result!" moment: suspense → reveal + confetti.
+  function runResultMoment(optionId: string) {
+    setRevealing(true)
+    window.setTimeout(() => {
+      setRevealing(false)
+      applyVoted(optionId)
+      confetti({
+        particleCount: 120,
+        spread: 75,
+        origin: { y: 0.6 },
+        colors: ['#DC2626', '#16a34a', '#fbbf24', '#ffffff'],
+      })
+    }, 1500)
   }
 
   async function submitVote() {
     if (!user || !selectedId) return
     const optionId = selectedId
     const text = comment.trim() || null
+    const stateVal = voteState || null
     setVoting(true)
     setVoteError('')
 
@@ -181,6 +226,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       p_poll_id:   poll.id,
       p_option_id: optionId,
       p_comment:   text,
+      p_state:     stateVal,
     })
 
     if (error) {
@@ -193,9 +239,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       return
     }
 
-    applyVoted(optionId)
     setVoting(false)
     if (text) loadComments()
+    runResultMoment(optionId)
   }
 
   // Results sorted by vote count descending
@@ -216,7 +262,22 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {confetti && <Confetti />}
+      {/* "Omo, see result!" suspense overlay */}
+      {revealing && (
+        <div className="fixed inset-0 z-[80] bg-gray-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-5">
+          <div className="flex gap-2">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="w-3 h-3 rounded-full bg-[#DC2626]"
+                style={{ animation: 'flame-pulse 0.9s ease-in-out infinite', animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+          <p className="text-white font-bold text-lg">{t('result.counting')}</p>
+        </div>
+      )}
+
       {/* Poll meta row */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[poll.category] ?? 'bg-muted text-muted-foreground'}`}>
@@ -228,7 +289,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
           <Users size={11} />
-          <span>{fmtVotes(poll.total_votes)} votes</span>
+          <span>{fmtVotes(poll.total_votes)} {t('card.votes')}</span>
         </div>
       </div>
 
@@ -260,9 +321,21 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
               )
             })}
 
-          {/* Optional comment — appears once an option is chosen */}
+          {/* Optional comment + state — appears once an option is chosen */}
           {selectedId && (
             <div className="flex flex-col gap-3 pt-1">
+              {/* State (optional) — powers the state-by-state breakdown */}
+              <div className="flex items-center gap-2 border border-border rounded-xl px-3 min-h-[44px] focus-within:ring-2 focus-within:ring-primary">
+                <MapPin size={15} className="text-muted-foreground shrink-0" />
+                <select
+                  value={voteState}
+                  onChange={(e) => setVoteState(e.target.value)}
+                  className="flex-1 bg-transparent text-base outline-none py-2.5"
+                >
+                  <option value="">Your state (optional)</option>
+                  {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
               <div>
                 <textarea
                   value={comment}
@@ -303,6 +376,29 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           <span className="flex items-center gap-1 text-xs font-semibold shrink-0 mt-0.5">
             <Star size={11} /> +10 tokens
           </span>
+        </div>
+      )}
+
+      {/* Surprise insight + share */}
+      {votedOptionId && insight && (
+        <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-xl p-5 flex flex-col gap-3 animate-fade-in-up">
+          <p className="text-base font-bold leading-snug">{insight}</p>
+          <a
+            href={whatsappHref(
+              shareMessages.afterVote(
+                poll.id,
+                poll.question,
+                total > 0
+                  ? Math.round(((poll.options.find((o) => o.id === votedOptionId)?.vote_count ?? 0) / total) * 100)
+                  : 0
+              )
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white text-sm font-bold px-5 min-h-[44px] rounded-full hover:brightness-95 active:scale-95 transition-all"
+          >
+            {t('result.shareResult')}
+          </a>
         </div>
       )}
 

@@ -54,6 +54,7 @@ async function getPulse() {
       supabase
         .from('polls')
         .select('id, question, category, total_votes, created_by, profile:profiles!created_by ( username ), options:poll_options ( id, text, vote_count, display_order )')
+        .eq('is_community', false)
         .gte('created_at', weekStartIso)
         .order('total_votes', { ascending: false })
         .limit(100),

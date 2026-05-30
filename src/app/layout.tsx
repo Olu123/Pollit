@@ -6,6 +6,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import { LanguageProvider } from '@/components/LanguageProvider'
 import PwaRegister from '@/components/PwaRegister'
 import PageFade from '@/components/PageFade'
+import ReferralTracker from '@/components/ReferralTracker'
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'], display: 'swap' })
 
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               &copy; {new Date().getFullYear()} Pollit
             </footer>
             <PwaRegister />
+            <ReferralTracker />
           </AuthProvider>
         </LanguageProvider>
       </body>

@@ -1,52 +1,66 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Calendar, User, Share2 } from 'lucide-react'
+import type { Metadata } from 'next'
+import { ArrowLeft, Calendar, User, Share2, Users2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Poll } from '@/lib/types'
 import VotingPanel from '@/components/VotingPanel'
+import StateBreakdown from '@/components/StateBreakdown'
+import FloatingShare from '@/components/FloatingShare'
+import CommunityGate from '@/components/CommunityGate'
 import { T } from '@/components/LanguageProvider'
+import { SITE_URL } from '@/lib/site'
+import { shareMessages, whatsappHref } from '@/lib/share'
 
-const SITE = 'agora-ng.vercel.app'
+const POLL_SELECT = `
+  id, question, category, created_by, expires_at, total_votes, is_hot_take,
+  is_community, community_name, community_code, community_password, created_at,
+  profile:profiles!created_by ( id, username, avatar_url ),
+  options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
+`
 
-function shareLinks(poll: Poll) {
-  const url = `https://${SITE}/polls/${poll.id}`
-  const text = `Vote on this poll: ${poll.question} — ${url}`
+export const revalidate = 60
+
+async function getPoll(id: string): Promise<Poll | null> {
+  const { data, error } = await supabase.from('polls').select(POLL_SELECT).eq('id', id).single()
+  if (error || !data) return null
+  const poll = data as unknown as Poll
+  poll.options = [...poll.options].sort((a, b) => a.display_order - b.display_order)
+  return poll
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const poll = await getPoll(id)
+  if (!poll || poll.is_community) return { title: 'Pollit' }
   return {
-    whatsapp: `https://wa.me/?text=${encodeURIComponent(text)}`,
-    telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(`Vote on this poll: ${poll.question}`)}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text.length > 280 ? text.slice(0, 277) + '…' : text)}`,
+    title: `${poll.question} — Pollit`,
+    openGraph: {
+      title: poll.question,
+      description: 'Vote now on Pollit 🗳️',
+      url: `${SITE_URL}/polls/${id}`,
+      images: [{ url: `/api/og/poll/${id}`, width: 1200, height: 630 }],
+    },
+    twitter: { card: 'summary_large_image', images: [`/api/og/poll/${id}`] },
   }
 }
 
-// Re-validate every 60 s so the server snapshot stays reasonably fresh.
-// Real-time updates from VotingPanel (client) keep the UI live between revalidations.
-export const revalidate = 60
-
 export default async function PollPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ code?: string }>
 }) {
   const { id } = await params
+  const { code } = await searchParams
+  const poll = await getPoll(id)
+  if (!poll) notFound()
 
-  const { data, error } = await supabase
-    .from('polls')
-    .select(`
-      id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at,
-      profile:profiles!created_by ( id, username, avatar_url ),
-      options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
-    `)
-    .eq('id', id)
-    .single()
-
-  if (error || !data) notFound()
-
-  // Cast Supabase response to our Poll type
-  const poll = data as unknown as Poll
-
-  // Sort options by display_order for consistent rendering
-  poll.options = [...poll.options].sort((a, b) => a.display_order - b.display_order)
+  // Community poll gate — require the invite code.
+  if (poll.is_community && poll.community_code && code !== poll.community_code) {
+    return <CommunityGate pollId={poll.id} communityName={poll.community_name} />
+  }
 
   const createdAt = new Date(poll.created_at).toLocaleDateString('en-NG', {
     day: 'numeric',
@@ -54,10 +68,25 @@ export default async function PollPage({
     year: 'numeric',
   })
 
-  const links = shareLinks(poll)
+  const shareMsg =
+    poll.is_community && poll.community_name && poll.community_code
+      ? shareMessages.community(poll.id, poll.question, poll.community_name, poll.community_code)
+      : poll.is_hot_take
+        ? shareMessages.hotTake(poll.id, poll.question)
+        : shareMessages.newPoll(poll.id, poll.question)
+
+  const url = `${SITE_URL}/polls/${poll.id}`
+  const links = {
+    whatsapp: whatsappHref(shareMsg),
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(poll.question)}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${poll.question} — ${url}`)}`,
+  }
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      <FloatingShare href={links.whatsapp} />
+
       {/* Back link */}
       <Link
         href="/"
@@ -69,6 +98,19 @@ export default async function PollPage({
 
       {/* Poll card */}
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-8 shadow-sm flex flex-col gap-5 sm:gap-6">
+        {/* Community banner */}
+        {poll.is_community && (
+          <div className="flex items-center gap-2 bg-primary-light text-primary rounded-xl px-3 py-2.5">
+            <Users2 size={16} strokeWidth={2.5} className="shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold"><T k="community.badge" /></p>
+              {poll.community_name && (
+                <p className="text-sm font-bold text-foreground truncate">{poll.community_name}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Question */}
         <h1 className="text-xl sm:text-2xl font-black text-foreground leading-snug">
           {poll.question}
@@ -91,6 +133,9 @@ export default async function PollPage({
         {/* Voting panel (client — handles real-time, auth, RPC) */}
         <VotingPanel poll={poll} />
       </div>
+
+      {/* 📍 State-by-state breakdown */}
+      <StateBreakdown poll={poll} />
 
       {/* Prominent share section */}
       <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col items-center gap-3 text-center">
