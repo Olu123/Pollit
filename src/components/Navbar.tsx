@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Menu, X, BarChart2, LogOut, Star } from 'lucide-react'
+import { Menu, X, BarChart2, LogOut, Star, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 
@@ -33,7 +33,8 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
+
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0" onClick={() => setOpen(false)}>
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
@@ -96,15 +97,31 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile toggle */}
-        <button
-          className="md:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle navigation"
-          aria-expanded={open}
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        {/* Mobile right — quick create + points pill + hamburger */}
+        <div className="md:hidden flex items-center gap-2">
+          {profile && (
+            <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2 py-1 rounded-full">
+              <Star size={10} strokeWidth={2.5} />
+              <span>{profile.points >= 1000 ? `${(profile.points / 1000).toFixed(1)}k` : profile.points}</span>
+            </div>
+          )}
+          <Link
+            href="/create"
+            onClick={() => setOpen(false)}
+            aria-label="Create poll"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white hover:bg-primary-dark transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </Link>
+          <button
+            className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle navigation"
+            aria-expanded={open}
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
@@ -115,7 +132,7 @@ export default function Navbar() {
               key={href}
               href={href}
               onClick={() => setOpen(false)}
-              className={`text-sm font-medium px-4 py-3 rounded-xl transition-colors ${
+              className={`text-sm font-medium px-4 py-3.5 rounded-xl transition-colors ${
                 pathname === href
                   ? 'text-primary bg-primary-light'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -124,24 +141,16 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          <Link
-            href="/create"
-            onClick={() => setOpen(false)}
-            className="mt-1 bg-primary text-white text-sm font-semibold px-4 py-3 rounded-xl text-center hover:bg-primary-dark transition-colors"
-          >
-            Create Poll
-          </Link>
           {user ? (
             <>
-              {profile && (
-                <div className="flex items-center gap-1.5 px-4 py-2 text-sm text-primary font-semibold">
-                  <Star size={13} strokeWidth={2.5} />
-                  {profile.points.toLocaleString()} pts
+              {displayName && (
+                <div className="px-4 py-2 text-xs text-muted-foreground">
+                  Signed in as <span className="font-semibold text-foreground">{displayName}</span>
                 </div>
               )}
               <button
                 onClick={() => { signOut(); setOpen(false) }}
-                className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left"
+                className="flex items-center gap-2.5 text-sm font-medium px-4 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left w-full"
               >
                 <LogOut size={15} /> Sign out
               </button>
@@ -150,7 +159,7 @@ export default function Navbar() {
             <Link
               href="/login"
               onClick={() => setOpen(false)}
-              className="text-sm font-medium px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="text-sm font-medium px-4 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               Login
             </Link>

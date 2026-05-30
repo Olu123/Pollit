@@ -70,15 +70,15 @@ export default function CreatePollPage() {
   if (loading || !user) return null
 
   return (
-    <main className="max-w-xl mx-auto px-4 sm:px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-foreground">Create a Poll</h1>
+    <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-black text-foreground">Create a Poll</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
           Ask Nigeria. Earn <span className="text-primary font-semibold">+50 points</span> for creating a poll.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
         {/* Question */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-1.5">
@@ -90,21 +90,21 @@ export default function CreatePollPage() {
             placeholder="e.g. Who will win the 2027 election?"
             rows={3}
             maxLength={280}
-            className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+            className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
           />
           <p className="text-xs text-muted-foreground mt-1 text-right">{question.length}/280</p>
         </div>
 
         {/* Category */}
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-1.5">Category</label>
+          <label className="block text-sm font-semibold text-foreground mb-2">Category</label>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
-                className={`text-sm font-semibold px-4 py-2 rounded-full transition-colors ${
+                className={`text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
                   category === cat
                     ? 'bg-primary text-white'
                     : 'bg-muted text-muted-foreground hover:bg-border hover:text-foreground'
@@ -121,10 +121,10 @@ export default function CreatePollPage() {
           <label className="block text-sm font-semibold text-foreground mb-2">
             Options <span className="text-muted-foreground font-normal">(2–6)</span>
           </label>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {options.map((opt, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0 text-center">
+                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0 text-center select-none">
                   {i + 1}
                 </span>
                 <input
@@ -133,16 +133,16 @@ export default function CreatePollPage() {
                   onChange={(e) => setOption(i, e.target.value)}
                   placeholder={`Option ${i + 1}`}
                   maxLength={120}
-                  className="flex-1 border border-border rounded-xl px-4 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                  className="flex-1 border border-border rounded-xl px-4 py-3 text-base bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground min-h-[44px]"
                 />
                 {options.length > 2 && (
                   <button
                     type="button"
                     onClick={() => removeOption(i)}
-                    className="p-2 text-muted-foreground hover:text-red-500 transition-colors"
+                    className="flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-red-500 active:text-red-600 transition-colors rounded-xl hover:bg-red-50 shrink-0"
                     aria-label="Remove option"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={16} />
                   </button>
                 )}
               </div>
@@ -152,7 +152,7 @@ export default function CreatePollPage() {
             <button
               type="button"
               onClick={addOption}
-              className="mt-2 flex items-center gap-1.5 text-sm text-primary hover:text-primary-dark font-semibold transition-colors"
+              className="mt-3 flex items-center gap-1.5 text-sm text-primary hover:text-primary-dark font-semibold transition-colors py-1"
             >
               <Plus size={15} strokeWidth={2.5} /> Add option
             </button>
@@ -161,7 +161,7 @@ export default function CreatePollPage() {
 
         {/* Expiry */}
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-1.5">
+          <label className="block text-sm font-semibold text-foreground mb-2">
             Poll duration
           </label>
           <div className="flex flex-wrap gap-2">
@@ -170,7 +170,7 @@ export default function CreatePollPage() {
                 key={days}
                 type="button"
                 onClick={() => setExpiry(days)}
-                className={`text-sm font-semibold px-4 py-2 rounded-full transition-colors ${
+                className={`text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
                   expiryDays === days
                     ? 'bg-primary text-white'
                     : 'bg-muted text-muted-foreground hover:bg-border hover:text-foreground'
@@ -191,7 +191,7 @@ export default function CreatePollPage() {
         <button
           type="submit"
           disabled={busy}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-3.5 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60 min-h-[56px]"
         >
           {busy ? (
             <><Loader2 size={17} className="animate-spin" /> Publishing…</>

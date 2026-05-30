@@ -52,7 +52,7 @@ export default async function PollPage({
       </Link>
 
       {/* Poll card */}
-      <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col gap-6">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-8 shadow-sm flex flex-col gap-5 sm:gap-6">
         {/* Question */}
         <h1 className="text-xl sm:text-2xl font-black text-foreground leading-snug">
           {poll.question}

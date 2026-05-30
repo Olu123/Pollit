@@ -3,15 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Cell,
-} from 'recharts'
 import { Users, Clock, CheckCircle2, Loader2, Star } from 'lucide-react'
 import type { Poll, PollOption } from '@/lib/types'
 import { useAuth } from './AuthProvider'
@@ -48,9 +39,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [voting, setVoting]        = useState(false)
   const [voteError, setVoteError]  = useState('')
 
-  const isExpired  = new Date(poll.expires_at).getTime() <= Date.now()
+  const isExpired   = new Date(poll.expires_at).getTime() <= Date.now()
   const showResults = !!votedOptionId || isExpired || !user
-  const total = poll.options.reduce((s, o) => s + o.vote_count, 0)
+  const total       = poll.options.reduce((s, o) => s + o.vote_count, 0)
 
   // Check if this user already voted
   useEffect(() => {
@@ -109,7 +100,6 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       )
     } else {
       setVoted(optionId)
-      // Optimistically update local state (realtime will confirm)
       setPoll((prev) => ({
         ...prev,
         total_votes: prev.total_votes + 1,
@@ -121,15 +111,12 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     setVoting(false)
   }
 
-  // Chart data, sorted by vote count for display
-  const chartData = [...poll.options]
+  // Results sorted by vote count descending
+  const results = [...poll.options]
     .sort((a, b) => b.vote_count - a.vote_count)
     .map((o) => ({
-      id:       o.id,
-      name:     o.text.length > 24 ? o.text.slice(0, 24) + '…' : o.text,
-      fullName: o.text,
-      votes:    o.vote_count,
-      pct:      total > 0 ? Math.round((o.vote_count / total) * 100) : 0,
+      ...o,
+      pct: total > 0 ? Math.round((o.vote_count / total) * 100) : 0,
     }))
 
   if (!votedChecked) {
@@ -141,8 +128,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Poll meta */}
+    <div className="flex flex-col gap-5">
+      {/* Poll meta row */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[poll.category] ?? 'bg-muted text-muted-foreground'}`}>
           {poll.category}
@@ -159,9 +146,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Vote buttons OR results */}
       {showResults ? (
-        <ResultsChart chartData={chartData} votedOptionId={votedOptionId} total={total} />
+        <ResultsBars results={results} votedOptionId={votedOptionId} total={total} />
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           {poll.options
             .slice()
             .sort((a, b) => a.display_order - b.display_order)
@@ -170,7 +157,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 key={opt.id}
                 onClick={() => castVote(opt.id)}
                 disabled={voting}
-                className="w-full text-left px-5 py-4 rounded-2xl border-2 border-border bg-card hover:border-primary hover:bg-primary-light transition-all duration-150 text-sm font-semibold text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="w-full text-left px-4 sm:px-5 py-4 min-h-[56px] rounded-2xl border-2 border-border bg-card hover:border-primary hover:bg-primary-light active:scale-[0.98] transition-all duration-150 text-sm font-semibold text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary leading-snug"
               >
                 {voting ? (
                   <span className="flex items-center gap-2 justify-center text-muted-foreground">
@@ -184,13 +171,13 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Voted confirmation */}
       {votedOptionId && (
-        <div className="flex items-center gap-2 bg-primary-light text-primary text-sm font-semibold px-4 py-3 rounded-xl">
-          <CheckCircle2 size={16} strokeWidth={2.5} />
-          <span>
+        <div className="flex items-start gap-2.5 bg-primary-light text-primary px-4 py-3 rounded-xl">
+          <CheckCircle2 size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" />
+          <span className="text-sm font-semibold flex-1 leading-snug">
             You voted for{' '}
             <strong>&ldquo;{poll.options.find((o) => o.id === votedOptionId)?.text}&rdquo;</strong>
           </span>
-          <span className="ml-auto flex items-center gap-1 text-xs">
+          <span className="flex items-center gap-1 text-xs font-semibold shrink-0 mt-0.5">
             <Star size={11} /> +10 pts
           </span>
         </div>
@@ -198,14 +185,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Unauthenticated prompt */}
       {!user && !isExpired && (
-        <div className="text-center py-2">
-          <p className="text-sm text-muted-foreground mb-2">
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <p className="text-sm text-muted-foreground">
             Sign in to cast your vote and earn{' '}
             <span className="text-primary font-semibold">+10 points</span>.
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-primary-dark transition-colors"
+            className="inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 py-3 rounded-full hover:bg-primary-dark active:scale-95 transition-all min-h-[48px]"
           >
             Sign in to vote
           </Link>
@@ -221,87 +208,54 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   )
 }
 
-// ── Recharts results bar chart ────────────────────────────────
+// ── CSS progress-bar results — works at any width ─────────────
 
-interface ChartEntry {
-  id: string; name: string; fullName: string; votes: number; pct: number
+interface ResultEntry {
+  id: string
+  text: string
+  vote_count: number
+  pct: number
 }
 
-function ResultsChart({
-  chartData, votedOptionId, total,
+function ResultsBars({
+  results,
+  votedOptionId,
+  total,
 }: {
-  chartData: ChartEntry[]
+  results: ResultEntry[]
   votedOptionId: string | null
   total: number
 }) {
-  const chartHeight = Math.max(chartData.length * 60, 120)
-
   return (
-    <div>
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ top: 4, right: 52, bottom: 4, left: 8 }}
-          barCategoryGap="28%"
-        >
-          <XAxis
-            type="number"
-            domain={[0, 100]}
-            tickFormatter={(v) => `${v}%`}
-            tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={148}
-            tick={{ fontSize: 12, fill: 'var(--color-foreground)' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            cursor={{ fill: 'var(--color-muted)', radius: 6 }}
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null
-              const d = payload[0].payload as ChartEntry
-              return (
-                <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-sm">
-                  <p className="font-semibold text-foreground">{d.fullName}</p>
-                  <p className="text-muted-foreground">{d.votes.toLocaleString()} votes ({d.pct}%)</p>
-                </div>
-              )
-            }}
-          />
-          <Bar
-            dataKey="pct"
-            radius={[0, 6, 6, 0]}
-            label={{
-              position: 'right',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter: (v: any) => `${v}%`,
-              fontSize: 12,
-              fill: 'var(--color-muted-foreground)',
-            }}
-          >
-            {chartData.map((entry) => (
-              <Cell
-                key={entry.id}
-                fill={
-                  entry.id === votedOptionId
-                    ? 'var(--color-primary)'
-                    : 'var(--color-primary-light)'
-                }
-                stroke={entry.id === votedOptionId ? 'var(--color-primary-dark)' : 'none'}
-                strokeWidth={1}
+    <div className="flex flex-col gap-4">
+      {results.map((opt) => {
+        const isVoted = opt.id === votedOptionId
+        return (
+          <div key={opt.id}>
+            <div className="flex items-baseline justify-between gap-3 mb-1.5">
+              <span className={`text-sm leading-snug ${isVoted ? 'text-primary font-semibold' : 'text-foreground/80 font-medium'}`}>
+                {isVoted && (
+                  <CheckCircle2 size={13} className="inline mr-1 mb-0.5 shrink-0" />
+                )}
+                {opt.text}
+              </span>
+              <span className={`text-sm font-bold tabular-nums shrink-0 ${isVoted ? 'text-primary' : 'text-foreground'}`}>
+                {opt.pct}%
+              </span>
+            </div>
+            <div className="h-3 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-[width] duration-700 ease-out ${isVoted ? 'bg-primary' : 'bg-primary/30'}`}
+                style={{ width: `${opt.pct}%` }}
               />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-
-      <p className="text-xs text-muted-foreground mt-2 text-right">
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {opt.vote_count.toLocaleString()} vote{opt.vote_count !== 1 ? 's' : ''}
+            </p>
+          </div>
+        )
+      })}
+      <p className="text-xs text-muted-foreground text-right border-t border-border pt-2.5 mt-1">
         {total.toLocaleString()} total vote{total !== 1 ? 's' : ''}
       </p>
     </div>
