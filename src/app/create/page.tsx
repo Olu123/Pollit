@@ -95,16 +95,16 @@ export default function CreatePollPage() {
           <p className="text-xs text-muted-foreground mt-1 text-right">{question.length}/280</p>
         </div>
 
-        {/* Category */}
+        {/* Category — horizontally scrollable on mobile, wraps on desktop */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">Category</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
-                className={`text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
+                className={`shrink-0 text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
                   category === cat
                     ? 'bg-primary text-white'
                     : 'bg-muted text-muted-foreground hover:bg-border hover:text-foreground'
@@ -164,13 +164,13 @@ export default function CreatePollPage() {
           <label className="block text-sm font-semibold text-foreground mb-2">
             Poll duration
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
             {EXPIRY_OPTIONS.map(({ label, days }) => (
               <button
                 key={days}
                 type="button"
                 onClick={() => setExpiry(days)}
-                className={`text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
+                className={`shrink-0 text-sm font-semibold px-4 py-2.5 rounded-full transition-colors min-h-[44px] ${
                   expiryDays === days
                     ? 'bg-primary text-white'
                     : 'bg-muted text-muted-foreground hover:bg-border hover:text-foreground'
@@ -188,17 +188,20 @@ export default function CreatePollPage() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60 min-h-[56px]"
-        >
-          {busy ? (
-            <><Loader2 size={17} className="animate-spin" /> Publishing…</>
-          ) : (
-            'Publish Poll (+50 pts)'
-          )}
-        </button>
+        {/* Sticky at viewport bottom on mobile, inline on desktop */}
+        <div className="sticky bottom-4 sm:static z-10">
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60 min-h-[56px] shadow-lg shadow-primary/20 sm:shadow-none"
+          >
+            {busy ? (
+              <><Loader2 size={17} className="animate-spin" /> Publishing…</>
+            ) : (
+              'Publish Poll (+50 pts)'
+            )}
+          </button>
+        </div>
       </form>
     </main>
   )

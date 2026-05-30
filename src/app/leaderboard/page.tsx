@@ -115,20 +115,20 @@ export default async function LeaderboardPage({
   const activeTab = TABS.find((t) => t.key === tab)!
 
   return (
-    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <Trophy size={18} className="text-white" strokeWidth={2.5} />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
+          <Trophy size={20} className="text-white" strokeWidth={2.5} />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-none">
             Leaderboard
           </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeTab.hint} · {sorted.length} ranked user{sorted.length !== 1 ? 's' : ''}
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground ml-[2.875rem]">
-          {activeTab.hint} · {sorted.length} ranked user{sorted.length !== 1 ? 's' : ''}
-        </p>
       </div>
 
       {/* Tabs */}
@@ -139,7 +139,7 @@ export default async function LeaderboardPage({
             <Link
               key={key}
               href={`/leaderboard?tab=${key}`}
-              className={`shrink-0 flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
+              className={`shrink-0 flex items-center gap-1.5 text-sm font-semibold px-4 min-h-[44px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
                 isActive
                   ? 'bg-primary text-white shadow-sm'
                   : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-border'
@@ -270,7 +270,7 @@ function EmptyState() {
       </div>
       <Link
         href="/"
-        className="bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-primary-dark transition-colors"
+        className="inline-flex items-center bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
       >
         Browse Polls
       </Link>

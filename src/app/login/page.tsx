@@ -82,7 +82,7 @@ export default function LoginPage() {
               <button
                 onClick={handleGoogle}
                 disabled={busy}
-                className="w-full flex items-center justify-center gap-3 border border-border rounded-xl px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-3 border border-border rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 <GoogleIcon />
                 Continue with Google
@@ -96,7 +96,7 @@ export default function LoginPage() {
 
               <button
                 onClick={() => setStep('phone')}
-                className="w-full flex items-center justify-center gap-3 bg-muted rounded-xl px-4 py-3 text-sm font-semibold text-foreground hover:bg-border transition-colors"
+                className="w-full flex items-center justify-center gap-3 bg-muted rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-border active:scale-[0.99] transition-all"
               >
                 <Phone size={16} strokeWidth={2} />
                 Continue with Phone (OTP)
@@ -108,7 +108,7 @@ export default function LoginPage() {
             <>
               <button
                 onClick={() => { setStep('choose'); setError('') }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors -mt-1 mb-1"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 px-1 min-h-[44px] w-fit"
               >
                 ← Back
               </button>
@@ -117,13 +117,13 @@ export default function LoginPage() {
                   Phone number
                 </label>
                 <div className="flex items-center gap-2 border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
-                  <span className="pl-3 text-sm text-muted-foreground font-medium shrink-0">🇳🇬 +234</span>
+                  <span className="pl-3 text-base text-muted-foreground font-medium shrink-0">🇳🇬 +234</span>
                   <input
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="8012345678"
-                    className="flex-1 py-3 pr-3 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+                    className="flex-1 py-3.5 pr-3 text-base bg-transparent outline-none placeholder:text-muted-foreground"
                     onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
                   />
                 </div>
@@ -134,7 +134,7 @@ export default function LoginPage() {
               <button
                 onClick={handleSendOtp}
                 disabled={busy || phone.replace(/\D/g, '').length < 7}
-                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 {busy ? 'Sending…' : 'Send OTP'}
                 {!busy && <ArrowRight size={15} />}
@@ -157,23 +157,23 @@ export default function LoginPage() {
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="123456"
-                  className="w-full border border-border rounded-xl px-4 py-3 text-lg font-bold text-center tracking-[0.4em] bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground placeholder:tracking-normal"
+                  className="w-full border border-border rounded-xl px-4 py-3.5 text-xl font-bold text-center tracking-[0.4em] bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground placeholder:tracking-normal"
                   onKeyDown={(e) => e.key === 'Enter' && handleVerifyOtp()}
                 />
               </div>
               <button
                 onClick={handleVerifyOtp}
                 disabled={busy || otp.length < 6}
-                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 {busy ? 'Verifying…' : 'Verify OTP'}
                 {!busy && <ArrowRight size={15} />}
               </button>
               <button
                 onClick={() => { setStep('phone'); setOtp(''); setError('') }}
-                className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
               >
-                <RotateCcw size={11} /> Resend / change number
+                <RotateCcw size={12} /> Resend / change number
               </button>
             </>
           )}

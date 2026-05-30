@@ -59,7 +59,7 @@ export default async function HomePage({
   const [polls, totals] = await Promise.all([getPolls(active), getTotals()])
 
   return (
-    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
       {/* Hero */}
       <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div>
@@ -92,7 +92,7 @@ export default async function HomePage({
         </div>
         <Link
           href="/create"
-          className="inline-flex items-center gap-2 bg-primary text-white font-semibold text-sm px-6 py-3 rounded-full hover:bg-primary-dark transition-colors self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="inline-flex items-center justify-center gap-2 bg-primary text-white font-semibold text-sm px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <Plus size={16} strokeWidth={2.5} />
           Create Poll
@@ -114,7 +114,7 @@ export default async function HomePage({
               href={href}
               role="tab"
               aria-selected={isActive}
-              className={`shrink-0 text-sm font-semibold px-4 py-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
+              className={`shrink-0 flex items-center text-sm font-semibold px-4 min-h-[44px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
                 isActive
                   ? 'bg-primary text-white shadow-sm'
                   : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-border'
@@ -141,7 +141,7 @@ export default async function HomePage({
           <p className="text-sm text-muted-foreground">Be the first to start the conversation.</p>
           <Link
             href="/create"
-            className="mt-2 bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:bg-primary-dark transition-colors"
+            className="mt-2 inline-flex items-center bg-primary text-white text-sm font-semibold px-5 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
           >
             Create a Poll
           </Link>

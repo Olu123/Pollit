@@ -113,15 +113,15 @@ export default function PollCard({ poll }: { poll: Poll }) {
           </div>
           <Link
             href={`/polls/${poll.id}`}
-            className="flex items-center justify-center h-9 px-5 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="flex items-center justify-center h-11 px-6 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             Vote
           </Link>
         </div>
 
         {/* Row 2: share buttons */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground shrink-0">Share:</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground shrink-0 mr-0.5">Share:</span>
           <ShareBtn href={share.whatsapp(poll)} label="Share on WhatsApp"    cls="bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 focus-visible:ring-[#25D366]"><WhatsAppIcon /></ShareBtn>
           <ShareBtn href={share.telegram(poll)} label="Share on Telegram"    cls="bg-[#229ED9]/10 text-[#229ED9] hover:bg-[#229ED9]/20 focus-visible:ring-[#229ED9]"><TelegramIcon /></ShareBtn>
           <ShareBtn href={share.facebook(poll)} label="Share on Facebook"    cls="bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2]/20 focus-visible:ring-[#1877F2]"><FacebookIcon /></ShareBtn>
@@ -149,7 +149,7 @@ function ShareBtn({
       rel="noopener noreferrer"
       aria-label={label}
       title={label}
-      className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-95 ${cls}`}
+      className={`flex items-center justify-center w-11 h-11 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-95 ${cls}`}
     >
       {children}
     </a>

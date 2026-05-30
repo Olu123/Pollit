@@ -41,11 +41,11 @@ export default async function PollPage({
   })
 
   return (
-    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
       {/* Back link */}
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
       >
         <ArrowLeft size={15} />
         All polls
