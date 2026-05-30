@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { useLanguage } from '@/components/LanguageProvider'
 import {
   Loader2, Save, Star, BarChart2, CheckSquare, Lock, Mail, CheckCircle2, Pencil, X,
 } from 'lucide-react'
@@ -46,6 +47,7 @@ interface Stats {
 export default function ProfilePage() {
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { t } = useLanguage()
 
   const [ready, setReady]   = useState(false)
   const [saving, setSaving] = useState(false)
@@ -179,29 +181,29 @@ export default function ProfilePage() {
             <h1 className="text-xl sm:text-2xl font-black text-foreground truncate">
               {username ? `@${username}` : 'Your profile'}
             </h1>
-            <p className="text-sm text-muted-foreground">Manage your Pollit account</p>
+            <p className="text-sm text-muted-foreground">{t('profile.manage')}</p>
           </div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={Star}       label="Tokens"  value={stats.points} />
-        <StatCard icon={BarChart2}  label="Polls"   value={stats.pollsCreated} />
-        <StatCard icon={CheckSquare} label="Votes"  value={stats.votesCast} />
+        <StatCard icon={Star}       label={t('profile.statTokens')} value={stats.points} />
+        <StatCard icon={BarChart2}  label={t('profile.statPolls')}  value={stats.pollsCreated} />
+        <StatCard icon={CheckSquare} label={t('profile.statVotes')} value={stats.votesCast} />
       </div>
 
       {/* Profile details — view / edit toggle */}
       <form onSubmit={handleSave} className="bg-card border border-border rounded-2xl p-4 sm:p-6 flex flex-col gap-5">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-foreground">Profile details</h2>
+          <h2 className="text-lg font-bold text-foreground">{t('profile.details')}</h2>
           {editing ? (
             <button
               type="button"
               onClick={() => { setEditing(false); setError(''); loadAll() }}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground px-3 min-h-[40px] rounded-full hover:bg-muted transition-colors"
             >
-              <X size={15} /> Cancel
+              <X size={15} /> {t('profile.cancel')}
             </button>
           ) : (
             <button
@@ -209,7 +211,7 @@ export default function ProfilePage() {
               onClick={() => setEditing(true)}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-dark px-3 min-h-[40px] rounded-full hover:bg-primary-light transition-colors"
             >
-              <Pencil size={14} /> Edit
+              <Pencil size={14} /> {t('profile.edit')}
             </button>
           )}
         </div>
@@ -217,7 +219,7 @@ export default function ProfilePage() {
         <fieldset disabled={!editing} className="contents">
 
         {/* Username */}
-        <Field label="Username" required hint="This is shown publicly (e.g. @lagos_boy).">
+        <Field label={t('profile.username')} required hint={t('profile.usernameHint')}>
           <div className="flex items-center border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
             <span className="pl-3 text-base text-muted-foreground select-none">@</span>
             <input
@@ -233,8 +235,8 @@ export default function ProfilePage() {
 
         {/* Full name (private) */}
         <Field
-          label="Full name"
-          hint={<span className="inline-flex items-center gap-1"><Lock size={11} /> Private — never shown publicly.</span>}
+          label={t('profile.fullName')}
+          hint={<span className="inline-flex items-center gap-1"><Lock size={11} /> {t('profile.fullNameHint')}</span>}
         >
           <input
             type="text"
@@ -248,32 +250,32 @@ export default function ProfilePage() {
 
         {/* Age range + Sex */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Age range">
-            <Select value={ageRange} onChange={setAgeRange} placeholder="Select age range">
+          <Field label={t('profile.ageRange')}>
+            <Select value={ageRange} onChange={setAgeRange} placeholder={t('profile.select')}>
               {AGE_RANGES.map((a) => <option key={a} value={a}>{a}</option>)}
             </Select>
           </Field>
-          <Field label="Sex">
-            <Select value={sex} onChange={setSex} placeholder="Select">
+          <Field label={t('profile.sex')}>
+            <Select value={sex} onChange={setSex} placeholder={t('profile.select')}>
               {SEX_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
           </Field>
         </div>
 
         {/* Birthday (month + day, no year) */}
-        <Field label="Birthday" hint="Month and day only — no year.">
+        <Field label={t('profile.birthday')} hint={t('profile.birthdayHint')}>
           <div className="grid grid-cols-2 gap-4">
-            <Select value={birthMonth} onChange={setMonth} placeholder="Month">
+            <Select value={birthMonth} onChange={setMonth} placeholder={t('profile.month')}>
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </Select>
-            <Select value={birthDay} onChange={setDay} placeholder="Day">
+            <Select value={birthDay} onChange={setDay} placeholder={t('profile.day')}>
               {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
             </Select>
           </div>
         </Field>
 
         {/* Email (read-only) */}
-        <Field label="Email" hint="From your sign-in — cannot be changed here.">
+        <Field label={t('profile.email')} hint={t('profile.emailHint')}>
           <div className="flex items-center gap-2 border border-border rounded-xl px-4 py-3 bg-muted/50 min-h-[44px]">
             <Mail size={15} className="text-muted-foreground shrink-0" />
             <span className="text-base text-muted-foreground truncate">{email}</span>
@@ -281,7 +283,7 @@ export default function ProfilePage() {
         </Field>
 
         {/* Phone */}
-        <Field label="Phone number">
+        <Field label={t('profile.phone')}>
           <input
             type="tel"
             value={phone}
@@ -293,11 +295,11 @@ export default function ProfilePage() {
         </Field>
 
         {/* Bio */}
-        <Field label="Bio">
+        <Field label={t('profile.bio')}>
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value.slice(0, MAX_BIO))}
-            placeholder="Tell Nigeria a bit about yourself..."
+            placeholder={t('profile.bioPlaceholder')}
             rows={3}
             maxLength={MAX_BIO}
             className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
@@ -312,7 +314,7 @@ export default function ProfilePage() {
         )}
         {saved && (
           <p className="flex items-center gap-2 text-sm text-primary bg-primary-light rounded-xl px-4 py-3 font-semibold">
-            <CheckCircle2 size={16} strokeWidth={2.5} /> Profile saved.
+            <CheckCircle2 size={16} strokeWidth={2.5} /> {t('profile.saved')}
           </p>
         )}
 
@@ -322,22 +324,22 @@ export default function ProfilePage() {
             disabled={saving}
             className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60"
           >
-            {saving ? <><Loader2 size={17} className="animate-spin" /> Saving…</> : <><Save size={17} /> Save changes</>}
+            {saving ? <><Loader2 size={17} className="animate-spin" /> {t('profile.saving')}</> : <><Save size={17} /> {t('profile.save')}</>}
           </button>
         )}
       </form>
 
       {/* Recent activity */}
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold text-foreground">Your recent polls</h2>
+        <h2 className="text-lg font-bold text-foreground">{t('profile.recent')}</h2>
         {recent.length === 0 ? (
           <div className="bg-card border border-border rounded-2xl p-6 text-center">
-            <p className="text-sm text-muted-foreground">You haven&rsquo;t created any polls yet.</p>
+            <p className="text-sm text-muted-foreground">{t('profile.noRecent')}</p>
             <Link
               href="/create"
               className="mt-3 inline-flex items-center bg-primary text-white text-sm font-semibold px-5 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
             >
-              Create your first poll
+              {t('profile.firstPoll')}
             </Link>
           </div>
         ) : (

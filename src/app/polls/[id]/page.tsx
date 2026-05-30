@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, User, Share2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Poll } from '@/lib/types'
 import VotingPanel from '@/components/VotingPanel'
+import { T } from '@/components/LanguageProvider'
 
 const SITE = 'agora-ng.vercel.app'
 
@@ -32,7 +33,7 @@ export default async function PollPage({
   const { data, error } = await supabase
     .from('polls')
     .select(`
-      id, question, category, created_by, expires_at, total_votes, created_at,
+      id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at,
       profile:profiles!created_by ( id, username, avatar_url ),
       options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
     `)
@@ -63,7 +64,7 @@ export default async function PollPage({
         className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
       >
         <ArrowLeft size={15} />
-        All polls
+        <T k="vote.allPolls" />
       </Link>
 
       {/* Poll card */}
@@ -95,9 +96,9 @@ export default async function PollPage({
       <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col items-center gap-3 text-center">
         <div className="flex items-center gap-2 text-sm font-bold text-foreground">
           <Share2 size={16} className="text-primary" strokeWidth={2.5} />
-          Share this poll
+          <T k="detail.shareTitle" />
         </div>
-        <p className="text-xs text-muted-foreground">Get more Nigerians voting — spread the word.</p>
+        <p className="text-xs text-muted-foreground"><T k="detail.shareSub" /></p>
         <div className="flex items-center gap-2.5">
           <ShareButton href={links.whatsapp} label="Share on WhatsApp"    cls="bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20"><WhatsAppIcon /></ShareButton>
           <ShareButton href={links.telegram} label="Share on Telegram"    cls="bg-[#229ED9]/10 text-[#229ED9] hover:bg-[#229ED9]/20"><TelegramIcon /></ShareButton>

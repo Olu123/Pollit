@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { Flame, TrendingUp, Zap, MessageCircle, LayoutGrid, Users, Trophy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { T } from '@/components/LanguageProvider'
+import type { StringKey } from '@/lib/i18n'
 import type { PollCategory } from '@/lib/types'
 
 export const revalidate = 3600 // refresh hourly
@@ -153,9 +155,9 @@ export default async function PulsePage() {
       {/* Header */}
       <header className="text-center flex flex-col items-center gap-1.5">
         <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
-          🇳🇬 Nigerian Pulse
+          <T k="pulse.title" />
         </h1>
-        <p className="text-sm text-muted-foreground">The voice of Nigeria this week</p>
+        <p className="text-sm text-muted-foreground"><T k="pulse.subtitle" /></p>
         <span className="text-xs font-semibold bg-primary-light text-primary px-3 py-1 rounded-full mt-1">
           {range}
         </span>
@@ -167,8 +169,8 @@ export default async function PulsePage() {
             <Flame size={36} className="text-primary" strokeWidth={2} />
           </div>
           <div>
-            <p className="font-bold text-lg text-foreground">No polls yet this week</p>
-            <p className="text-sm text-muted-foreground mt-1">Create the first one and set the agenda.</p>
+            <p className="font-bold text-lg text-foreground"><T k="pulse.emptyTitle" /></p>
+            <p className="text-sm text-muted-foreground mt-1"><T k="pulse.emptySub" /></p>
           </div>
           <Link href="/create" className="inline-flex items-center bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all">
             Create a Poll
@@ -178,7 +180,7 @@ export default async function PulsePage() {
         <>
           {/* 1. Most voted */}
           {data.mostVoted && (
-            <Section icon={<Flame size={18} className="text-[#DC2626]" />} title="Most Voted Poll This Week">
+            <Section icon={<Flame size={18} className="text-[#DC2626]" />} title={<T k="pulse.mostVoted" />}>
               <Link
                 href={`/polls/${data.mostVoted.id}`}
                 className="block bg-card border border-border rounded-xl shadow-sm hover:shadow-md transition-all p-5 flex-col gap-4"
@@ -210,7 +212,7 @@ export default async function PulsePage() {
           )}
 
           {/* 2. Trending top 5 */}
-          <Section icon={<TrendingUp size={18} className="text-primary" />} title="Top 5 Trending Polls">
+          <Section icon={<TrendingUp size={18} className="text-primary" />} title={<T k="pulse.trending" />}>
             <div className="flex flex-col gap-2">
               {data.trending.map((p, i) => {
                 const top = topOptions(p)[0]
@@ -232,7 +234,7 @@ export default async function PulsePage() {
 
           {/* 3. Biggest upsets (closest races) */}
           {data.upsets.length > 0 && (
-            <Section icon={<Zap size={18} className="text-amber-500" />} title="Biggest Upsets" subtitle="The closest, most-contested races">
+            <Section icon={<Zap size={18} className="text-amber-500" />} title={<T k="pulse.upsets" />} subtitle={<T k="pulse.upsetsSub" />}>
               <div className="flex flex-col gap-2">
                 {data.upsets.map(({ poll, top, margin }) => (
                   <Link key={poll.id} href={`/polls/${poll.id}`} className="bg-card border border-border rounded-xl shadow-sm hover:shadow-md transition-all p-4">
@@ -250,7 +252,7 @@ export default async function PulsePage() {
 
           {/* 4. Most discussed */}
           {data.mostDiscussed.length > 0 && (
-            <Section icon={<MessageCircle size={18} className="text-violet-500" />} title="Most Discussed">
+            <Section icon={<MessageCircle size={18} className="text-violet-500" />} title={<T k="pulse.discussed" />}>
               <div className="flex flex-col gap-2">
                 {data.mostDiscussed.map((p) => (
                   <Link key={p.id} href={`/polls/${p.id}`} className="bg-card border border-border rounded-xl shadow-sm hover:shadow-md transition-all p-4 flex items-center gap-3">
@@ -267,7 +269,7 @@ export default async function PulsePage() {
           )}
 
           {/* 5. By category */}
-          <Section icon={<LayoutGrid size={18} className="text-blue-500" />} title="By Category">
+          <Section icon={<LayoutGrid size={18} className="text-blue-500" />} title={<T k="pulse.byCategory" />}>
             <div className="flex flex-col gap-2">
               {data.byCategory.map(({ category, poll }) => poll && (
                 <Link key={category} href={`/polls/${poll.id}`} className="bg-card border border-border rounded-xl shadow-sm hover:shadow-md transition-all p-4 flex items-center gap-3">
@@ -280,18 +282,18 @@ export default async function PulsePage() {
           </Section>
 
           {/* 6. Community stats */}
-          <Section icon={<Users size={18} className="text-primary" />} title="Community Stats">
+          <Section icon={<Users size={18} className="text-primary" />} title={<T k="pulse.community" />}>
             <div className="grid grid-cols-2 gap-3">
-              <StatBox label="New users this week" value={fmt(data.stats.newUsers)} />
-              <StatBox label="Votes this week" value={fmt(data.stats.votesThisWeek)} />
+              <StatBox label={<T k="pulse.newUsers" />} value={fmt(data.stats.newUsers)} />
+              <StatBox label={<T k="pulse.votesWeek" />} value={fmt(data.stats.votesThisWeek)} />
               <StatBox
-                label="Most active voter"
+                label={<T k="pulse.topVoter" />}
                 value={data.stats.topVoter?.username ? `@${data.stats.topVoter.username}` : '—'}
                 sub={data.stats.topVoter ? `${fmt(data.stats.topVoter.count)} votes` : undefined}
                 icon={<Trophy size={13} className="text-amber-500" />}
               />
               <StatBox
-                label="Top poll creator"
+                label={<T k="pulse.topCreator" />}
                 value={data.stats.topCreator?.username ? `@${data.stats.topCreator.username}` : '—'}
                 sub={data.stats.topCreator ? `${fmt(data.stats.topCreator.votes)} votes earned` : undefined}
                 icon={<Trophy size={13} className="text-amber-500" />}
@@ -306,7 +308,7 @@ export default async function PulsePage() {
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:brightness-95 active:scale-[0.98] transition-all"
           >
-            Share this week&rsquo;s Pulse on WhatsApp
+            <T k="pulse.share" />
           </a>
         </>
       )}
@@ -314,7 +316,7 @@ export default async function PulsePage() {
   )
 }
 
-function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -327,7 +329,7 @@ function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; t
   )
 }
 
-function StatBox({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon?: React.ReactNode }) {
+function StatBox({ label, value, sub, icon }: { label: React.ReactNode; value: string; sub?: string; icon?: React.ReactNode }) {
   return (
     <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>

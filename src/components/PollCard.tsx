@@ -1,38 +1,28 @@
+'use client'
+
 import Link from 'next/link'
 import { Clock, Users } from 'lucide-react'
 import type { Poll, PollCategory } from '@/lib/types'
+import { useLanguage } from './LanguageProvider'
+import type { StringKey } from '@/lib/i18n'
 
 const SITE = 'agora-ng.vercel.app'
-
-// ── Share URL builders ────────────────────────────────────────
 
 function pollUrl(id: string) {
   return `https://${SITE}/polls/${id}`
 }
-
 function shareText(poll: Poll) {
   return `Vote on this poll: ${poll.question} — ${SITE}/polls/${poll.id}`
 }
-
 const share = {
-  whatsapp: (poll: Poll) =>
-    `https://wa.me/?text=${encodeURIComponent(shareText(poll))}`,
-
-  telegram: (poll: Poll) =>
-    `https://t.me/share/url?url=${encodeURIComponent(pollUrl(poll.id))}&text=${encodeURIComponent(`Vote on this poll: ${poll.question}`)}`,
-
-  facebook: (poll: Poll) =>
-    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pollUrl(poll.id))}`,
-
-  twitter: (poll: Poll) => {
-    const text = shareText(poll)
-    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-      text.length > 280 ? text.slice(0, 277) + '…' : text
-    )}`
+  whatsapp: (p: Poll) => `https://wa.me/?text=${encodeURIComponent(shareText(p))}`,
+  telegram: (p: Poll) => `https://t.me/share/url?url=${encodeURIComponent(pollUrl(p.id))}&text=${encodeURIComponent(`Vote on this poll: ${p.question}`)}`,
+  facebook: (p: Poll) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pollUrl(p.id))}`,
+  twitter: (p: Poll) => {
+    const text = shareText(p)
+    return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text.length > 280 ? text.slice(0, 277) + '…' : text)}`
   },
 }
-
-// ── Styles / helpers ──────────────────────────────────────────
 
 const CATEGORY_STYLES: Record<PollCategory, string> = {
   Politics:      'bg-red-100 text-red-700',
@@ -42,28 +32,14 @@ const CATEGORY_STYLES: Record<PollCategory, string> = {
   Lifestyle:     'bg-pink-100 text-pink-700',
 }
 
-const AVATAR_PALETTE = [
-  '#16a34a', '#2563eb', '#7c3aed', '#dc2626',
-  '#ea580c', '#0891b2', '#be185d', '#0d9488',
-]
+const AVATAR_PALETTE = ['#16a34a', '#2563eb', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#be185d', '#0d9488']
 function avatarColor(seed: string) {
   let h = 0
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length]
 }
 
-function timeRemaining(expiresAt: string): string {
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff <= 0) return 'Ended'
-  const days = Math.floor(diff / 86_400_000)
-  const hours = Math.floor((diff % 86_400_000) / 3_600_000)
-  if (days > 0) return `${days}d ${hours}h left`
-  if (hours > 0) return `${hours}h left`
-  const mins = Math.floor((diff % 3_600_000) / 60_000)
-  return `${mins}m left`
-}
-
-// Colour-coded: green = plenty (>24h), amber = ending soon (<24h), red = last hour.
+// Colour-coded: green plenty (>24h), amber <24h, red <1h.
 function timeColor(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now()
   if (diff <= 0) return 'text-muted-foreground'
@@ -77,36 +53,41 @@ function fmtVotes(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
 
-// ── Card ─────────────────────────────────────────────────────
-
 export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: number }) {
+  const { t } = useLanguage()
   const sorted = [...poll.options].sort((a, b) => b.vote_count - a.vote_count)
   const top    = sorted.slice(0, 2)
   const total  = poll.options.reduce((s, o) => s + o.vote_count, 0) || poll.total_votes
   const creator = poll.profile?.username ?? null
+
+  function timeRemaining(): string {
+    const diff = new Date(poll.expires_at).getTime() - Date.now()
+    if (diff <= 0) return t('card.ended')
+    const days = Math.floor(diff / 86_400_000)
+    const hours = Math.floor((diff % 86_400_000) / 3_600_000)
+    const left = t('card.left')
+    if (days > 0) return `${days}d ${hours}h ${left}`
+    if (hours > 0) return `${hours}h ${left}`
+    return `${Math.floor((diff % 3_600_000) / 60_000)}m ${left}`
+  }
 
   return (
     <article
       className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3.5 animate-fade-in-up"
       style={{ animationDelay: `${Math.min(index, 9) * 60}ms` }}
     >
-      {/* Category + time */}
       <div className="flex items-center justify-between gap-2">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${CATEGORY_STYLES[poll.category]}`}>
-          {poll.category}
+          {t(`cat.${poll.category}` as StringKey)}
         </span>
         <div className={`flex items-center gap-1 text-xs font-medium shrink-0 ${timeColor(poll.expires_at)}`}>
           <Clock size={11} strokeWidth={2.5} />
-          <span>{timeRemaining(poll.expires_at)}</span>
+          <span>{timeRemaining()}</span>
         </div>
       </div>
 
-      {/* Question */}
-      <h3 className="font-bold text-foreground text-[15px] leading-snug line-clamp-3">
-        {poll.question}
-      </h3>
+      <h3 className="font-bold text-foreground text-[15px] leading-snug line-clamp-3">{poll.question}</h3>
 
-      {/* Top 2 progress bars (animated fill) */}
       <div className="flex flex-col gap-2.5">
         {top.map((opt) => {
           const pct = total > 0 ? Math.round((opt.vote_count / total) * 100) : 0
@@ -117,17 +98,13 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
                 <span className="font-semibold text-foreground tabular-nums shrink-0">{pct}%</span>
               </div>
               <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-primary animate-bar"
-                  style={{ width: `${pct}%` }}
-                />
+                <div className="h-full rounded-full bg-primary animate-bar" style={{ width: `${pct}%` }} />
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* Creator */}
       {creator && (
         <div className="flex items-center gap-2 text-xs">
           <span
@@ -141,60 +118,40 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
         </div>
       )}
 
-      {/* Footer */}
       <div className="mt-auto pt-3 border-t border-border flex flex-col gap-2.5">
-        {/* Row 1: prominent vote badge + Vote CTA */}
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 bg-primary-light text-primary text-xs font-bold px-3 py-1.5 rounded-full">
             <Users size={13} strokeWidth={2.5} />
-            {fmtVotes(poll.total_votes)} votes
+            {fmtVotes(poll.total_votes)} {t('card.votes')}
           </span>
           <Link
             href={`/polls/${poll.id}`}
-            className="flex items-center justify-center h-11 px-6 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="flex items-center justify-center h-11 px-5 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            Vote
+            {t('card.vote')}
           </Link>
         </div>
 
-        {/* Row 2: share buttons */}
         <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground shrink-0 mr-0.5">Share:</span>
-          <ShareBtn href={share.whatsapp(poll)} label="Share on WhatsApp"    cls="bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 focus-visible:ring-[#25D366]"><WhatsAppIcon /></ShareBtn>
-          <ShareBtn href={share.telegram(poll)} label="Share on Telegram"    cls="bg-[#229ED9]/10 text-[#229ED9] hover:bg-[#229ED9]/20 focus-visible:ring-[#229ED9]"><TelegramIcon /></ShareBtn>
-          <ShareBtn href={share.facebook(poll)} label="Share on Facebook"    cls="bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2]/20 focus-visible:ring-[#1877F2]"><FacebookIcon /></ShareBtn>
-          <ShareBtn href={share.twitter(poll)}  label="Share on Twitter / X" cls="bg-foreground/8 text-foreground hover:bg-foreground/15 focus-visible:ring-foreground"><TwitterXIcon /></ShareBtn>
+          <span className="text-xs text-muted-foreground shrink-0 mr-0.5">{t('card.share')}</span>
+          <ShareBtn href={share.whatsapp(poll)} label="WhatsApp" cls="bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20"><WhatsAppIcon /></ShareBtn>
+          <ShareBtn href={share.telegram(poll)} label="Telegram" cls="bg-[#229ED9]/10 text-[#229ED9] hover:bg-[#229ED9]/20"><TelegramIcon /></ShareBtn>
+          <ShareBtn href={share.facebook(poll)} label="Facebook" cls="bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2]/20"><FacebookIcon /></ShareBtn>
+          <ShareBtn href={share.twitter(poll)}  label="X"        cls="bg-foreground/8 text-foreground hover:bg-foreground/15"><TwitterXIcon /></ShareBtn>
         </div>
       </div>
     </article>
   )
 }
 
-// ── Share button — pure server component, no event handlers ──
-
-function ShareBtn({
-  href, label, cls, children,
-}: {
-  href: string
-  label: string
-  cls: string
-  children: React.ReactNode
-}) {
+function ShareBtn({ href, label, cls, children }: { href: string; label: string; cls: string; children: React.ReactNode }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={label}
-      title={label}
-      className={`flex items-center justify-center w-11 h-11 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-95 ${cls}`}
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}
+      className={`flex items-center justify-center w-11 h-11 rounded-full transition-colors duration-150 active:scale-95 ${cls}`}>
       {children}
     </a>
   )
 }
-
-// ── SVG icons ─────────────────────────────────────────────────
 
 function WhatsAppIcon() {
   return (
@@ -204,7 +161,6 @@ function WhatsAppIcon() {
     </svg>
   )
 }
-
 function TelegramIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -212,7 +168,6 @@ function TelegramIcon() {
     </svg>
   )
 }
-
 function FacebookIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -220,7 +175,6 @@ function FacebookIcon() {
     </svg>
   )
 }
-
 function TwitterXIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

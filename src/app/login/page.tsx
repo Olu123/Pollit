@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { BarChart2, Phone, ArrowRight, RotateCcw } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { useLanguage } from '@/components/LanguageProvider'
 
 type Step = 'choose' | 'phone' | 'otp'
 
 export default function LoginPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { t } = useLanguage()
 
   const [step, setStep]   = useState<Step>('choose')
   const [phone, setPhone] = useState('')
@@ -72,9 +74,9 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-black">
-              Welcome to <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
+              {t('login.welcomePrefix')} <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{t('login.subtitle')}</p>
           </div>
         </div>
 
@@ -87,7 +89,7 @@ export default function LoginPage() {
                 className="w-full flex items-center justify-center gap-3 border border-border rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 <GoogleIcon />
-                Continue with Google
+                {t('login.google')}
               </button>
 
               <button
@@ -96,7 +98,7 @@ export default function LoginPage() {
                 className="w-full flex items-center justify-center gap-3 bg-[#1877F2] text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-[#1466d4] active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 <FacebookIcon />
-                Continue with Facebook
+                {t('login.facebook')}
               </button>
 
               <button
@@ -105,12 +107,12 @@ export default function LoginPage() {
                 className="w-full flex items-center justify-center gap-3 bg-black text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-zinc-800 active:scale-[0.99] transition-all disabled:opacity-60"
               >
                 <XIcon />
-                Continue with X
+                {t('login.x')}
               </button>
 
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
+                <span className="text-xs text-muted-foreground">{t('login.or')}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
@@ -119,7 +121,7 @@ export default function LoginPage() {
                 className="w-full flex items-center justify-center gap-3 bg-muted rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-border active:scale-[0.99] transition-all"
               >
                 <Phone size={16} strokeWidth={2} />
-                Continue with Phone (OTP)
+                {t('login.phone')}
               </button>
             </>
           )}
@@ -130,11 +132,11 @@ export default function LoginPage() {
                 onClick={() => { setStep('choose'); setError('') }}
                 className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 px-1 min-h-[44px] w-fit"
               >
-                ← Back
+                {t('login.back')}
               </button>
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  Phone number
+                  {t('login.phoneLabel')}
                 </label>
                 <div className="flex items-center gap-2 border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
                   <span className="pl-3 text-base text-muted-foreground font-medium shrink-0">🇳🇬 +234</span>
@@ -156,7 +158,7 @@ export default function LoginPage() {
                 disabled={busy || phone.replace(/\D/g, '').length < 7}
                 className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
               >
-                {busy ? 'Sending…' : 'Send OTP'}
+                {busy ? t('login.sending') : t('login.sendOtp')}
                 {!busy && <ArrowRight size={15} />}
               </button>
             </>
@@ -169,7 +171,7 @@ export default function LoginPage() {
                   We sent a 6-digit code to <strong>{normalizePhone(phone)}</strong>
                 </p>
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  Enter OTP
+                  {t('login.otpLabel')}
                 </label>
                 <input
                   type="text"
@@ -186,14 +188,14 @@ export default function LoginPage() {
                 disabled={busy || otp.length < 6}
                 className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
               >
-                {busy ? 'Verifying…' : 'Verify OTP'}
+                {busy ? t('login.verifying') : t('login.verifyOtp')}
                 {!busy && <ArrowRight size={15} />}
               </button>
               <button
                 onClick={() => { setStep('phone'); setOtp(''); setError('') }}
                 className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
               >
-                <RotateCcw size={12} /> Resend / change number
+                <RotateCcw size={12} /> {t('login.resend')}
               </button>
             </>
           )}
@@ -206,7 +208,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          By continuing you agree to Pollit&rsquo;s Terms of Service.
+          {t('login.terms')}
         </p>
       </div>
     </main>

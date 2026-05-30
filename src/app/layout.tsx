@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
 import { AuthProvider } from '@/components/AuthProvider'
+import { LanguageProvider } from '@/components/LanguageProvider'
 import PwaRegister from '@/components/PwaRegister'
 import PageFade from '@/components/PageFade'
 
@@ -31,14 +32,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Thin red accent bar at the very top */}
         <div className="h-1 bg-[#DC2626] w-full shrink-0" />
 
-        <AuthProvider>
-          <Navbar />
-          <PageFade className="flex-1">{children}</PageFade>
-          <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} Pollit
-          </footer>
-          <PwaRegister />
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <Navbar />
+            <PageFade className="flex-1">{children}</PageFade>
+            <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+              &copy; {new Date().getFullYear()} Pollit
+            </footer>
+            <PwaRegister />
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   )

@@ -1,0 +1,178 @@
+export type Lang = 'en' | 'pid'
+
+export const LANG_KEY = 'pollit_lang'
+
+type Entry = { en: string; pid: string }
+
+export const STRINGS = {
+  // ── Navigation ──────────────────────────────────────────────
+  'nav.home':        { en: 'Home',        pid: 'Home' },
+  'nav.create':      { en: 'Create Poll', pid: 'Make Poll' },
+  'nav.leaderboard': { en: 'Leaderboard', pid: 'Top Ranking' },
+  'nav.profile':     { en: 'Profile',     pid: 'My Page' },
+  'nav.login':       { en: 'Login',       pid: 'Enter' },
+  'nav.logout':      { en: 'Sign out',    pid: 'Comot' },
+  'nav.pulse':       { en: 'Pulse',       pid: 'Naija Pulse' },
+  'nav.signedInAs':  { en: 'Signed in as', pid: 'You enter as' },
+
+  // ── Home ────────────────────────────────────────────────────
+  'home.heroHighlight': { en: 'Nigeria:', pid: 'Naija!' },
+  'home.heroRest':      { en: 'Have your say. Pave the way. Save the day.', pid: 'Talk your own. Show the way. Save the day.' },
+  'home.heroSubtitle':  { en: 'Join thousands of Nigerians sharing opinions on politics, sports, entertainment and everyday life.', pid: 'Come vote for tins wey matter — from politics to sports, enjoyment and everyday life.' },
+  'home.statPolls':     { en: 'polls created', pid: 'polls dey live' },
+  'home.statVotes':     { en: 'votes cast',    pid: 'votes don cast' },
+  'home.statUsers':     { en: 'users',         pid: 'users' },
+  'home.hotTakes':      { en: '🔥 Hot Takes',  pid: '🔥 Hot Takes' },
+  'home.emptyTitle':    { en: 'No polls yet',  pid: 'Poll never reach here' },
+  'home.emptyTitleCat': { en: 'No polls here yet', pid: 'Poll never reach here' },
+  'home.emptySub':      { en: 'Be the first to start the conversation.', pid: 'You go be the first to make poll here!' },
+  'home.emptyCta':      { en: 'Create a Poll', pid: 'Make Poll' },
+
+  // ── Categories ──────────────────────────────────────────────
+  'cat.All':           { en: 'All',           pid: 'Everything' },
+  'cat.Politics':      { en: 'Politics',      pid: 'Politics' },
+  'cat.Sports':        { en: 'Sports',        pid: 'Sports' },
+  'cat.Entertainment': { en: 'Entertainment', pid: 'Enjoyment' },
+  'cat.Business':      { en: 'Business',      pid: 'Business' },
+  'cat.Lifestyle':     { en: 'Lifestyle',     pid: 'How We Dey' },
+
+  // ── Poll card ───────────────────────────────────────────────
+  'card.vote':   { en: 'Vote',  pid: 'Cast Your Vote' },
+  'card.votes':  { en: 'votes', pid: 'people don vote' },
+  'card.left':   { en: 'left',  pid: 'remain' },
+  'card.ended':  { en: 'Ended', pid: 'Don End' },
+  'card.share':  { en: 'Share:', pid: 'Share:' },
+
+  // ── Voting / poll detail ────────────────────────────────────
+  'vote.allPolls':       { en: 'All polls', pid: 'All polls' },
+  'vote.commentPlaceholder': { en: 'Add a comment... (optional)', pid: 'You fit add wetin you think (no be must)' },
+  'vote.submit':         { en: 'Submit Vote', pid: 'Send My Vote' },
+  'vote.submitting':     { en: 'Submitting…', pid: 'Dey send…' },
+  'vote.casting':        { en: 'Casting vote…', pid: 'Dey drop vote…' },
+  'vote.already':        { en: 'You have already voted on this poll.', pid: 'You don already vote for this poll.' },
+  'vote.youVoted':       { en: 'You voted for', pid: 'You vote for' },
+  'vote.signInPrompt':   { en: 'Sign in to cast your vote and earn', pid: 'Enter make you fit vote and collect' },
+  'vote.signInBtn':      { en: 'Sign in to vote', pid: 'Enter to vote' },
+  'vote.pollEnded':      { en: 'Poll ended', pid: 'Poll don end' },
+  'vote.totalVotes':     { en: 'total votes', pid: 'total votes' },
+  'comments.title':      { en: 'Comments', pid: 'Wetin People Talk' },
+  'comments.empty':      { en: 'No comments yet. Be the first!', pid: 'Nobody don talk yet. Be the first person!' },
+  'detail.shareTitle':   { en: 'Share this poll', pid: 'Share dis poll' },
+  'detail.shareSub':     { en: 'Get more Nigerians voting — spread the word.', pid: 'Make more Naija people vote — spread am.' },
+
+  // ── Create poll ─────────────────────────────────────────────
+  'create.title':        { en: 'Create a Poll', pid: 'Make Your Poll' },
+  'create.subtitlePre':  { en: 'Ask Nigeria. Earn', pid: 'Ask Naija. Collect' },
+  'create.subtitlePost': { en: 'for creating a poll.', pid: 'wey you make poll.' },
+  'create.question':     { en: 'Poll question', pid: 'Wetin you wan ask?' },
+  'create.questionPlaceholder': { en: 'e.g. Who will win the 2027 election?', pid: 'e.g. Who go win the 2027 election?' },
+  'create.category':     { en: 'Category', pid: 'Which type?' },
+  'create.options':      { en: 'Options', pid: 'Answers' },
+  'create.addOption':    { en: 'Add option', pid: 'Add another answer' },
+  'create.duration':     { en: 'Poll duration', pid: 'How long?' },
+  'create.publish':      { en: 'Publish Poll', pid: 'Publish My Poll' },
+  'create.publishing':   { en: 'Publishing…', pid: 'Dey publish…' },
+  'create.hotTake':      { en: 'Make this a Hot Take? 🔥', pid: 'Na Hot Take be dis? 🔥' },
+  'create.hotTakeSub':   { en: 'Hot Takes appear in the featured section', pid: 'Hot Takes dey show for the featured section' },
+  'create.preview':      { en: 'Live preview', pid: 'Live preview' },
+  'create.step1':        { en: 'Question', pid: 'Question' },
+  'create.step2':        { en: 'Options', pid: 'Answers' },
+  'create.step3':        { en: 'Settings', pid: 'Settings' },
+
+  // ── Login ───────────────────────────────────────────────────
+  'login.welcome':   { en: 'Welcome to Pollit', pid: 'Welcome Enter Pollit' },
+  'login.welcomePrefix': { en: 'Welcome to', pid: 'Welcome Enter' },
+  'login.resend':    { en: 'Resend / change number', pid: 'Send again / change number' },
+  'login.subtitle':  { en: 'Sign in to vote and create polls', pid: 'Come talk your own — vote and make poll' },
+  'login.google':    { en: 'Continue with Google', pid: 'Use Google Enter' },
+  'login.facebook':  { en: 'Continue with Facebook', pid: 'Use Facebook Enter' },
+  'login.x':         { en: 'Continue with X', pid: 'Use X Enter' },
+  'login.phone':     { en: 'Continue with Phone (OTP)', pid: 'Or use your phone number' },
+  'login.or':        { en: 'or', pid: 'or' },
+  'login.sendOtp':   { en: 'Send OTP', pid: 'Send Code' },
+  'login.sending':   { en: 'Sending…', pid: 'Dey send…' },
+  'login.verifyOtp': { en: 'Verify OTP', pid: 'Enter the Code' },
+  'login.verifying': { en: 'Verifying…', pid: 'Dey check…' },
+  'login.phoneLabel': { en: 'Phone number', pid: 'Your phone number' },
+  'login.otpLabel':  { en: 'Enter OTP', pid: 'Enter the Code' },
+  'login.back':      { en: '← Back', pid: '← Go back' },
+  'login.terms':     { en: "By continuing you agree to Pollit's Terms of Service.", pid: 'If you continue, you don gree to Pollit Terms of Service.' },
+
+  // ── Leaderboard ─────────────────────────────────────────────
+  'lb.title':        { en: 'Leaderboard', pid: 'Top Ranking' },
+  'lb.overall':      { en: 'Overall', pid: 'Total Overall' },
+  'lb.topVoters':    { en: 'Top Voters', pid: 'Who Vote Pass' },
+  'lb.topCreators':  { en: 'Top Creators', pid: 'Who Make Poll Pass' },
+  'lb.hintOverall':  { en: 'Ranked by total tokens', pid: 'Ranked by total tokens' },
+  'lb.hintVoters':   { en: 'Most votes cast', pid: 'Who vote pass' },
+  'lb.hintCreators': { en: 'Most polls created', pid: 'Who make poll pass' },
+  'lb.rankedUsers':  { en: 'ranked users', pid: 'ranked users' },
+  'lb.tokens':       { en: 'tokens', pid: 'tokens' },
+  'lb.votes':        { en: 'votes', pid: 'votes' },
+  'lb.polls':        { en: 'polls', pid: 'polls' },
+  'lb.emptyTitle':   { en: 'No rankings yet', pid: 'Ranking never start' },
+  'lb.emptySub':     { en: 'Be the first to vote or create a poll to earn tokens.', pid: 'Be the first to vote or make poll collect tokens.' },
+  'lb.browse':       { en: 'Browse Polls', pid: 'See Polls' },
+
+  // ── Profile ─────────────────────────────────────────────────
+  'profile.manage':   { en: 'Manage your Pollit account', pid: 'Manage your Pollit account' },
+  'profile.details':  { en: 'Profile details', pid: 'My Info' },
+  'profile.edit':     { en: 'Edit', pid: 'Change My Info' },
+  'profile.cancel':   { en: 'Cancel', pid: 'Leave am' },
+  'profile.save':     { en: 'Save changes', pid: 'Save Am' },
+  'profile.saving':   { en: 'Saving…', pid: 'Dey save…' },
+  'profile.saved':    { en: 'Profile saved.', pid: 'Profile don save.' },
+  'profile.username': { en: 'Username', pid: 'Your Name for App' },
+  'profile.usernameHint': { en: 'This is shown publicly (e.g. @lagos_boy).', pid: 'Na dis everybody go see (e.g. @lagos_boy).' },
+  'profile.fullName': { en: 'Full name', pid: 'Real Name (private)' },
+  'profile.fullNameHint': { en: 'Private — never shown publicly.', pid: 'Private — nobody go see am.' },
+  'profile.ageRange': { en: 'Age range', pid: 'How old you be' },
+  'profile.sex':      { en: 'Sex', pid: 'Sex' },
+  'profile.birthday': { en: 'Birthday', pid: 'Your Birthday' },
+  'profile.birthdayHint': { en: 'Month and day only — no year.', pid: 'Month and day — no year.' },
+  'profile.email':    { en: 'Email', pid: 'Email' },
+  'profile.emailHint':{ en: 'From your sign-in — cannot be changed here.', pid: 'From your login — you no fit change am here.' },
+  'profile.phone':    { en: 'Phone number', pid: 'Phone number' },
+  'profile.bio':      { en: 'Bio', pid: 'About You' },
+  'profile.bioPlaceholder': { en: 'Tell Nigeria a bit about yourself...', pid: 'Tell Naija small tin about yourself...' },
+  'profile.statTokens': { en: 'Tokens', pid: 'Tokens' },
+  'profile.statPolls':  { en: 'Polls', pid: 'Polls' },
+  'profile.statVotes':  { en: 'Votes', pid: 'Votes' },
+  'profile.recent':   { en: 'Your recent polls', pid: 'Polls wey you make' },
+  'profile.noRecent': { en: 'You haven’t created any polls yet.', pid: 'You never make any poll.' },
+  'profile.firstPoll':{ en: 'Create your first poll', pid: 'Make your first poll' },
+  'profile.select':   { en: 'Select', pid: 'Choose' },
+  'profile.month':    { en: 'Month', pid: 'Month' },
+  'profile.day':      { en: 'Day', pid: 'Day' },
+
+  // ── Pulse ───────────────────────────────────────────────────
+  'pulse.title':        { en: '🇳🇬 Nigerian Pulse', pid: '🇳🇬 Naija Pulse' },
+  'pulse.subtitle':     { en: 'The voice of Nigeria this week', pid: 'See wetin Naija dey talk this week' },
+  'pulse.mostVoted':    { en: 'Most Voted Poll This Week', pid: 'Who Get Most Votes' },
+  'pulse.trending':     { en: 'Top 5 Trending Polls', pid: 'Top 5 Trending' },
+  'pulse.upsets':       { en: 'Biggest Upsets', pid: 'Biggest Upsets' },
+  'pulse.upsetsSub':    { en: 'The closest, most-contested races', pid: 'The races wey close pass' },
+  'pulse.discussed':    { en: 'Most Discussed', pid: 'People Dey Talk Am Pass' },
+  'pulse.byCategory':   { en: 'By Category', pid: 'By Category' },
+  'pulse.community':    { en: 'Community Stats', pid: 'Community Stats' },
+  'pulse.newUsers':     { en: 'New users this week', pid: 'New users this week' },
+  'pulse.votesWeek':    { en: 'Votes this week', pid: 'Votes this week' },
+  'pulse.topVoter':     { en: 'Most active voter', pid: 'Who vote pass' },
+  'pulse.topCreator':   { en: 'Top poll creator', pid: 'Who make poll pass' },
+  'pulse.share':        { en: "Share this week’s Pulse on WhatsApp", pid: 'Share this week Pulse for WhatsApp' },
+  'pulse.emptyTitle':   { en: 'No polls yet this week', pid: 'No poll this week yet' },
+  'pulse.emptySub':     { en: 'Create the first one and set the agenda.', pid: 'Make the first one set the agenda.' },
+
+  // ── PWA install ─────────────────────────────────────────────
+  'pwa.install':     { en: 'Install Pollit', pid: 'Install Pollit' },
+  'pwa.installSub':  { en: 'Add to your home screen for quick access.', pid: 'Add am to your home screen make e easy.' },
+  'pwa.installBtn':  { en: 'Install', pid: 'Install' },
+} satisfies Record<string, Entry>
+
+export type StringKey = keyof typeof STRINGS
+
+export function translate(key: StringKey, lang: Lang): string {
+  const entry = STRINGS[key]
+  if (!entry) return key
+  return entry[lang] ?? entry.en
+}

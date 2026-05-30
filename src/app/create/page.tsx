@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
+import type { StringKey } from '@/lib/i18n'
+
+const HOT_TAKE_MIN_TOKENS = 100
 
 const CATEGORIES: PollCategory[] = [
   'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle',
@@ -26,18 +30,22 @@ const CATEGORY_STYLES: Record<PollCategory, string> = {
   Lifestyle:     'bg-pink-100 text-pink-700',
 }
 
-const STEPS = ['Question', 'Options', 'Settings']
+const STEP_KEYS: StringKey[] = ['create.step1', 'create.step2', 'create.step3']
 
 export default function CreatePollPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
+  const { t } = useLanguage()
 
   const [question, setQuestion] = useState('')
   const [category, setCategory] = useState<PollCategory>('Politics')
   const [options, setOptions]   = useState(['', ''])
   const [expiryDays, setExpiry] = useState(7)
+  const [isHotTake, setHotTake] = useState(false)
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
+
+  const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
@@ -67,10 +75,11 @@ export default function CreatePollPage() {
     const expiresAt = new Date(Date.now() + expiryDays * 86_400_000).toISOString()
 
     const { data: pollId, error: rpcError } = await supabase.rpc('create_poll', {
-      p_question:   question.trim(),
-      p_category:   category,
-      p_options:    trimmed,
-      p_expires_at: expiresAt,
+      p_question:    question.trim(),
+      p_category:    category,
+      p_options:     trimmed,
+      p_expires_at:  expiresAt,
+      p_is_hot_take: canHotTake && isHotTake,
     })
 
     if (rpcError) { setError(rpcError.message); setBusy(false); return }
@@ -85,9 +94,9 @@ export default function CreatePollPage() {
   return (
     <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-foreground">Create a Poll</h1>
+        <h1 className="text-2xl sm:text-3xl font-black text-foreground">{t('create.title')}</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
-          Ask Nigeria. Earn <span className="text-primary font-semibold">+30 tokens</span> for creating a poll.
+          {t('create.subtitlePre')} <span className="text-primary font-semibold">+30 tokens</span> {t('create.subtitlePost')}
         </p>
       </div>
 
@@ -98,12 +107,12 @@ export default function CreatePollPage() {
         {/* Question */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-1.5">
-            Poll question <span className="text-red-500">*</span>
+            {t('create.question')} <span className="text-red-500">*</span>
           </label>
           <textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="e.g. Who will win the 2027 election?"
+            placeholder={t('create.questionPlaceholder')}
             rows={3}
             maxLength={280}
             className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
@@ -113,7 +122,7 @@ export default function CreatePollPage() {
 
         {/* Category — horizontally scrollable on mobile, wraps on desktop */}
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Category</label>
+          <label className="block text-sm font-semibold text-foreground mb-2">{t('create.category')}</label>
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
             {CATEGORIES.map((cat) => (
               <button
@@ -126,16 +135,40 @@ export default function CreatePollPage() {
                     : 'bg-muted text-muted-foreground hover:bg-border hover:text-foreground'
                 }`}
               >
-                {cat}
+                {t(`cat.${cat}` as StringKey)}
               </button>
             ))}
           </div>
         </div>
 
+        {/* Hot Take toggle — only for users with 100+ tokens */}
+        {canHotTake && (
+          <button
+            type="button"
+            onClick={() => setHotTake((v) => !v)}
+            aria-pressed={isHotTake}
+            className={`flex items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+              isHotTake ? 'border-[#DC2626] bg-[#DC2626]/5' : 'border-border hover:border-[#DC2626]/40'
+            }`}
+          >
+            <div>
+              <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <span className={isHotTake ? 'animate-flame' : ''}>🔥</span> {t('create.hotTake')}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('create.hotTakeSub')}</p>
+            </div>
+            <span
+              className={`w-11 h-6 rounded-full p-0.5 shrink-0 transition-colors ${isHotTake ? 'bg-[#DC2626]' : 'bg-muted'}`}
+            >
+              <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isHotTake ? 'translate-x-5' : ''}`} />
+            </span>
+          </button>
+        )}
+
         {/* Options */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">
-            Options <span className="text-muted-foreground font-normal">(2–6)</span>
+            {t('create.options')} <span className="text-muted-foreground font-normal">(2–6)</span>
           </label>
           <div className="flex flex-col gap-2.5">
             {options.map((opt, i) => (
@@ -147,7 +180,7 @@ export default function CreatePollPage() {
                   type="text"
                   value={opt}
                   onChange={(e) => setOption(i, e.target.value)}
-                  placeholder={`Option ${i + 1}`}
+                  placeholder={`${t('create.options')} ${i + 1}`}
                   maxLength={120}
                   className="flex-1 border border-border rounded-xl px-4 py-3 text-base bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground min-h-[44px]"
                 />
@@ -170,7 +203,7 @@ export default function CreatePollPage() {
               onClick={addOption}
               className="mt-3 flex items-center gap-1.5 text-sm text-primary hover:text-primary-dark font-semibold transition-colors py-1"
             >
-              <Plus size={15} strokeWidth={2.5} /> Add option
+              <Plus size={15} strokeWidth={2.5} /> {t('create.addOption')}
             </button>
           )}
         </div>
@@ -178,7 +211,7 @@ export default function CreatePollPage() {
         {/* Expiry */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">
-            Poll duration
+            {t('create.duration')}
           </label>
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
             {EXPIRY_OPTIONS.map(({ label, days }) => (
@@ -200,8 +233,8 @@ export default function CreatePollPage() {
 
         {/* Live preview */}
         <div>
-          <label className="block text-sm font-semibold text-foreground mb-2">Live preview</label>
-          <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} />
+          <label className="block text-sm font-semibold text-foreground mb-2">{t('create.preview')}</label>
+          <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} isHotTake={canHotTake && isHotTake} />
         </div>
 
         {error && (
@@ -218,9 +251,9 @@ export default function CreatePollPage() {
             className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60 min-h-[56px] shadow-lg shadow-primary/20 sm:shadow-none"
           >
             {busy ? (
-              <><Loader2 size={17} className="animate-spin" /> Publishing…</>
+              <><Loader2 size={17} className="animate-spin" /> {t('create.publishing')}</>
             ) : (
-              'Publish Poll (+30 tokens)'
+              `${t('create.publish')} (+30 tokens)`
             )}
           </button>
         </div>
@@ -230,14 +263,15 @@ export default function CreatePollPage() {
 }
 
 function StepIndicator({ current }: { current: number }) {
+  const { t } = useLanguage()
   return (
     <div className="flex items-center mb-6">
-      {STEPS.map((label, i) => {
+      {STEP_KEYS.map((key, i) => {
         const n = i + 1
         const done = n < current
         const active = n === current
         return (
-          <div key={label} className="flex items-center flex-1 last:flex-none">
+          <div key={key} className="flex items-center flex-1 last:flex-none">
             <div className="flex items-center gap-2">
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
@@ -247,10 +281,10 @@ function StepIndicator({ current }: { current: number }) {
                 {done ? '✓' : n}
               </div>
               <span className={`text-xs font-semibold hidden sm:inline ${active ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {label}
+                {t(key)}
               </span>
             </div>
-            {n < STEPS.length && (
+            {n < STEP_KEYS.length && (
               <div className={`flex-1 h-0.5 mx-2 rounded-full transition-colors ${done ? 'bg-primary' : 'bg-border'}`} />
             )}
           </div>
@@ -261,22 +295,26 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 function PreviewCard({
-  question, category, options, expiryDays,
+  question, category, options, expiryDays, isHotTake,
 }: {
   question: string
   category: PollCategory
   options: string[]
   expiryDays: number
+  isHotTake: boolean
 }) {
+  const { t } = useLanguage()
   const opts = options.length ? options : ['Option 1', 'Option 2']
   const empty = options.length === 0
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm p-4 flex flex-col gap-3">
+    <div className={`rounded-xl border shadow-sm p-4 flex flex-col gap-3 ${isHotTake ? 'bg-gray-900 border-gray-800' : 'bg-card border-border'}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[category]}`}>{category}</span>
-        <span className="text-xs text-muted-foreground">{expiryDays}d left</span>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isHotTake ? 'bg-[#DC2626] text-white' : CATEGORY_STYLES[category]}`}>
+          {isHotTake ? <span className="inline-flex items-center gap-1"><span className="animate-flame">🔥</span> {t(`cat.${category}` as StringKey)}</span> : t(`cat.${category}` as StringKey)}
+        </span>
+        <span className={`text-xs ${isHotTake ? 'text-gray-400' : 'text-muted-foreground'}`}>{expiryDays}d {t('card.left')}</span>
       </div>
-      <h3 className={`font-bold text-[15px] leading-snug ${question.trim() ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+      <h3 className={`font-bold text-[15px] leading-snug ${isHotTake ? 'text-white' : question.trim() ? 'text-foreground' : 'text-muted-foreground italic'}`}>
         {question.trim() || 'Your question will appear here…'}
       </h3>
       <div className={`flex flex-col gap-2 ${empty ? 'opacity-50' : ''}`}>

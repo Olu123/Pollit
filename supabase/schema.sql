@@ -36,6 +36,7 @@ create table if not exists public.polls (
   created_by  uuid references public.profiles(id) on delete set null,
   expires_at  timestamptz not null,
   total_votes integer not null default 0,
+  is_hot_take boolean not null default false,
   created_at  timestamptz not null default now(),
   constraint  polls_category_check check (
     category in ('Politics','Sports','Entertainment','Business','Lifestyle')
@@ -143,11 +144,19 @@ $$;
 -- ── RPC: create_poll ──────────────────────────────────────────
 -- Atomically creates a poll + options, awards 30 tokens.
 
+-- Add the is_hot_take column to existing databases.
+alter table public.polls add column if not exists is_hot_take boolean default false;
+
+-- Drop the old 4-arg signature so PostgREST resolves to the new one.
+drop function if exists public.create_poll(text, text, text[], timestamptz);
+drop function if exists public.create_poll(text, text, text[], timestamptz, boolean);
+
 create or replace function public.create_poll(
-  p_question  text,
-  p_category  text,
-  p_options   text[],
-  p_expires_at timestamptz
+  p_question   text,
+  p_category   text,
+  p_options    text[],
+  p_expires_at timestamptz,
+  p_is_hot_take boolean default false
 )
 returns uuid
 language plpgsql security definer set search_path = public
@@ -160,8 +169,8 @@ begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
 
-  insert into polls (question, category, created_by, expires_at)
-  values (p_question, p_category, v_uid, p_expires_at)
+  insert into polls (question, category, created_by, expires_at, is_hot_take)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false))
   returning id into v_poll_id;
 
   for v_idx in 1 .. array_length(p_options, 1) loop

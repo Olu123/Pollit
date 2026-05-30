@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { Star, BarChart2, CheckSquare, Trophy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { T } from '@/components/LanguageProvider'
+import type { StringKey } from '@/lib/i18n'
 
 export const revalidate = 300 // re-fetch at most every 5 minutes
 
@@ -19,9 +21,9 @@ interface LeaderboardEntry {
 // ── Helpers ───────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'overall'  as TabKey, label: 'Overall',      icon: Star,        hint: 'Ranked by total tokens' },
-  { key: 'voters'   as TabKey, label: 'Top Voters',   icon: CheckSquare, hint: 'Most votes cast'       },
-  { key: 'creators' as TabKey, label: 'Top Creators', icon: BarChart2,   hint: 'Most polls created'    },
+  { key: 'overall'  as TabKey, labelKey: 'lb.overall'     as StringKey, icon: Star,        hintKey: 'lb.hintOverall'  as StringKey },
+  { key: 'voters'   as TabKey, labelKey: 'lb.topVoters'   as StringKey, icon: CheckSquare, hintKey: 'lb.hintVoters'   as StringKey },
+  { key: 'creators' as TabKey, labelKey: 'lb.topCreators' as StringKey, icon: BarChart2,   hintKey: 'lb.hintCreators' as StringKey },
 ] as const
 
 const AVATAR_PALETTE = [
@@ -117,17 +119,17 @@ export default async function LeaderboardPage({
         </div>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-none">
-            Leaderboard
+            <T k="lb.title" />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab.hint} · {sorted.length} ranked user{sorted.length !== 1 ? 's' : ''}
+            <T k={activeTab.hintKey} /> · {sorted.length} <T k="lb.rankedUsers" />
           </p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-0.5">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.map(({ key, labelKey, icon: Icon }) => {
           const isActive = key === tab
           return (
             <Link
@@ -140,7 +142,7 @@ export default async function LeaderboardPage({
               }`}
             >
               <Icon size={13} strokeWidth={2.5} />
-              {label}
+              <T k={labelKey} />
             </Link>
           )
         })}
@@ -223,11 +225,11 @@ function LeaderboardRow({
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           <span className={`flex items-center gap-1 ${tab === 'voters' ? 'text-primary font-semibold' : ''}`}>
             <CheckSquare size={11} strokeWidth={2} />
-            {fmtNum(entry.votes_cast)} vote{entry.votes_cast !== 1 ? 's' : ''}
+            {fmtNum(entry.votes_cast)} <T k="lb.votes" />
           </span>
           <span className={`flex items-center gap-1 ${tab === 'creators' ? 'text-primary font-semibold' : ''}`}>
             <BarChart2 size={11} strokeWidth={2} />
-            {fmtNum(entry.polls_created)} poll{entry.polls_created !== 1 ? 's' : ''}
+            {fmtNum(entry.polls_created)} <T k="lb.polls" />
           </span>
         </div>
       </div>
@@ -238,7 +240,7 @@ function LeaderboardRow({
           <Star size={12} strokeWidth={2.5} className={tab === 'overall' ? 'text-primary' : 'text-muted-foreground'} />
           <span className="text-sm">{fmtNum(entry.points)}</span>
         </div>
-        <span className="text-[10px] text-muted-foreground">tokens</span>
+        <span className="text-[10px] text-muted-foreground"><T k="lb.tokens" /></span>
       </div>
     </div>
   )
@@ -253,16 +255,16 @@ function EmptyState() {
         <Trophy size={28} className="text-muted-foreground" />
       </div>
       <div>
-        <p className="font-bold text-foreground">No rankings yet</p>
+        <p className="font-bold text-foreground"><T k="lb.emptyTitle" /></p>
         <p className="text-sm text-muted-foreground mt-1">
-          Be the first to vote or create a poll to earn tokens.
+          <T k="lb.emptySub" />
         </p>
       </div>
       <Link
         href="/"
         className="inline-flex items-center bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
       >
-        Browse Polls
+        <T k="lb.browse" />
       </Link>
     </div>
   )

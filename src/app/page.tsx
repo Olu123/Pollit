@@ -2,9 +2,18 @@ import Link from 'next/link'
 import { TrendingUp, Plus, Users, BarChart2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import PollCard from '@/components/PollCard'
+import HotTakeCard from '@/components/HotTakeCard'
+import { T } from '@/components/LanguageProvider'
 import type { Poll, PollCategory } from '@/lib/types'
+import type { StringKey } from '@/lib/i18n'
 
 export const revalidate = 30
+
+const POLL_SELECT = `
+  id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at,
+  profile:profiles!created_by ( id, username, avatar_url ),
+  options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
+`
 
 const CATEGORIES = [
   'All', 'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle',
@@ -14,11 +23,7 @@ type CategoryFilter = (typeof CATEGORIES)[number]
 async function getPolls(category: CategoryFilter): Promise<Poll[]> {
   let query = supabase
     .from('polls')
-    .select(`
-      id, question, category, created_by, expires_at, total_votes, created_at,
-      profile:profiles!created_by ( id, username, avatar_url ),
-      options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
-    `)
+    .select(POLL_SELECT)
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -31,6 +36,18 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
     console.error('Polls fetch error:', error.message)
     return []
   }
+  return (data ?? []) as unknown as Poll[]
+}
+
+async function getHotTakes(): Promise<Poll[]> {
+  const { data, error } = await supabase
+    .from('polls')
+    .select(POLL_SELECT)
+    .eq('is_hot_take', true)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) return []
   return (data ?? []) as unknown as Poll[]
 }
 
@@ -60,7 +77,7 @@ export default async function HomePage({
   const active: CategoryFilter =
     CATEGORIES.includes(category as CategoryFilter) ? (category as CategoryFilter) : 'All'
 
-  const [polls, totals] = await Promise.all([getPolls(active), getTotals()])
+  const [polls, totals, hotTakes] = await Promise.all([getPolls(active), getTotals(), getHotTakes()])
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
@@ -69,12 +86,12 @@ export default async function HomePage({
         <div>
           <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
             <span className="bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent">
-              Nigeria:
+              <T k="home.heroHighlight" />
             </span>{' '}
-            <span className="text-foreground">Have your say. Pave the way. Save the day.</span>
+            <span className="text-foreground"><T k="home.heroRest" /></span>
           </h1>
           <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-lg">
-            Join thousands of Nigerians sharing opinions on politics, sports, entertainment and everyday life.
+            <T k="home.heroSubtitle" />
           </p>
         </div>
         <Link
@@ -82,16 +99,30 @@ export default async function HomePage({
           className="inline-flex items-center justify-center gap-2 bg-primary text-white font-semibold text-sm px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <Plus size={16} strokeWidth={2.5} />
-          Create Poll
+          <T k="nav.create" />
         </Link>
       </section>
 
       {/* Live stats bar */}
       <div className="grid grid-cols-3 rounded-xl border border-border bg-card shadow-sm divide-x divide-border">
-        <Stat icon={<BarChart2 size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.pollCount)} label="polls created" />
-        <Stat icon={<TrendingUp size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.voteCount)} label="votes cast" />
-        <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label="users" />
+        <Stat icon={<BarChart2 size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.pollCount)} label={<T k="home.statPolls" />} />
+        <Stat icon={<TrendingUp size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.voteCount)} label={<T k="home.statVotes" />} />
+        <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label={<T k="home.statUsers" />} />
       </div>
+
+      {/* 🔥 Hot Takes row */}
+      {hotTakes.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-black text-foreground flex items-center gap-2">
+            <T k="home.hotTakes" />
+          </h2>
+          <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
+            {hotTakes.map((poll) => (
+              <HotTakeCard key={poll.id} poll={poll} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Category tabs */}
       <div
@@ -114,7 +145,7 @@ export default async function HomePage({
                   : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-border'
               }`}
             >
-              {cat}
+              <T k={`cat.${cat}` as StringKey} />
             </Link>
           )
         })}
@@ -134,12 +165,10 @@ export default async function HomePage({
           </div>
           <div>
             <p className="font-bold text-lg text-foreground">
-              {active === 'All' ? 'No polls yet' : `No polls in ${active} yet`}
+              <T k={active === 'All' ? 'home.emptyTitle' : 'home.emptyTitleCat'} />
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {active === 'All'
-                ? 'Be the first to start the conversation.'
-                : `Start the first ${active} poll and get the debate going.`}
+              <T k="home.emptySub" />
             </p>
           </div>
           <Link
@@ -147,7 +176,7 @@ export default async function HomePage({
             className="mt-1 inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
           >
             <Plus size={16} strokeWidth={2.5} />
-            Create a Poll
+            <T k="home.emptyCta" />
           </Link>
         </div>
       )}
@@ -155,7 +184,7 @@ export default async function HomePage({
   )
 }
 
-function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-3 px-2 gap-0.5 text-center">
       <div className="flex items-center gap-1.5">

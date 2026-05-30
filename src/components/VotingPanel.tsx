@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle } from 'lucide-react'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
+import { useLanguage } from './LanguageProvider'
 import Confetti from './Confetti'
 import { enqueueVote } from '@/lib/voteQueue'
 
@@ -59,6 +60,7 @@ const MAX_COMMENT = 280
 
 export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const { user } = useAuth()
+  const { t } = useLanguage()
 
   const [poll, setPoll]            = useState(initialPoll)
   const [votedOptionId, setVoted]  = useState<string | null>(null)
@@ -184,7 +186,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     if (error) {
       setVoteError(
         error.message.includes('already_voted')
-          ? 'You have already voted on this poll.'
+          ? t('vote.already')
           : error.message
       )
       setVoting(false)
@@ -222,7 +224,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </span>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Clock size={11} />
-          <span>{isExpired ? 'Poll ended' : timeRemaining(poll.expires_at)}</span>
+          <span>{isExpired ? t('vote.pollEnded') : timeRemaining(poll.expires_at).replace(/left$/, t('card.left'))}</span>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
           <Users size={11} />
@@ -265,7 +267,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}
-                  placeholder="Add a comment... (optional)"
+                  placeholder={t('vote.commentPlaceholder')}
                   rows={3}
                   maxLength={MAX_COMMENT}
                   className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
@@ -280,9 +282,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60"
               >
                 {voting ? (
-                  <><Loader2 size={17} className="animate-spin" /> Submitting…</>
+                  <><Loader2 size={17} className="animate-spin" /> {t('vote.submitting')}</>
                 ) : (
-                  'Submit Vote (+10 tokens)'
+                  `${t('vote.submit')} (+10 tokens)`
                 )}
               </button>
             </div>
@@ -295,7 +297,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         <div className="flex items-start gap-2.5 bg-primary-light text-primary px-4 py-3 rounded-xl">
           <CheckCircle2 size={16} strokeWidth={2.5} className="mt-0.5 shrink-0" />
           <span className="text-sm font-semibold flex-1 leading-snug">
-            You voted for{' '}
+            {t('vote.youVoted')}{' '}
             <strong>&ldquo;{poll.options.find((o) => o.id === votedOptionId)?.text}&rdquo;</strong>
           </span>
           <span className="flex items-center gap-1 text-xs font-semibold shrink-0 mt-0.5">
@@ -308,14 +310,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       {!user && !isExpired && (
         <div className="flex flex-col items-center gap-3 py-2 text-center">
           <p className="text-sm text-muted-foreground">
-            Sign in to cast your vote and earn{' '}
+            {t('vote.signInPrompt')}{' '}
             <span className="text-primary font-semibold">+10 tokens</span>.
           </p>
           <Link
             href="/login"
             className="inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 py-3 rounded-full hover:bg-primary-dark active:scale-95 transition-all min-h-[48px]"
           >
-            Sign in to vote
+            {t('vote.signInBtn')}
           </Link>
         </div>
       )}
@@ -350,6 +352,7 @@ function ResultsBars({
   votedOptionId: string | null
   total: number
 }) {
+  const { t } = useLanguage()
   return (
     <div className="flex flex-col gap-4">
       {results.map((opt) => {
@@ -380,7 +383,7 @@ function ResultsBars({
         )
       })}
       <p className="text-xs text-muted-foreground text-right border-t border-border pt-2.5 mt-1">
-        {total.toLocaleString()} total vote{total !== 1 ? 's' : ''}
+        {total.toLocaleString()} {t('vote.totalVotes')}
       </p>
     </div>
   )
@@ -389,17 +392,18 @@ function ResultsBars({
 // ── Comments feed ─────────────────────────────────────────────
 
 function CommentsFeed({ comments }: { comments: PollComment[] }) {
+  const { t } = useLanguage()
   return (
     <div className="flex flex-col gap-4 pt-4 border-t border-border">
       <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
         <MessageCircle size={15} strokeWidth={2.5} />
-        Comments
+        {t('comments.title')}
         <span className="text-muted-foreground font-normal">({comments.length})</span>
       </h2>
 
       {comments.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">
-          No comments yet. Be the first!
+          {t('comments.empty')}
         </p>
       ) : (
       <div className="flex flex-col gap-4">

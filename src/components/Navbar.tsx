@@ -6,11 +6,14 @@ import { useState, useEffect } from 'react'
 import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
+import { useLanguage } from './LanguageProvider'
+import LanguageToggle from './LanguageToggle'
+import type { StringKey } from '@/lib/i18n'
 
-const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/pulse', label: 'Pulse' },
-  { href: '/leaderboard', label: 'Leaderboard' },
+const NAV_LINKS: { href: string; key: StringKey }[] = [
+  { href: '/', key: 'nav.home' },
+  { href: '/pulse', key: 'nav.pulse' },
+  { href: '/leaderboard', key: 'nav.leaderboard' },
 ]
 
 export default function Navbar() {
@@ -19,6 +22,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const { user, profile } = useAuth()
+  const { t } = useLanguage()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4)
@@ -61,7 +65,7 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map(({ href, label }) => {
+          {NAV_LINKS.map(({ href, key }) => {
             const active = pathname === href
             return (
               <Link
@@ -71,7 +75,7 @@ export default function Navbar() {
                   active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {label}
+                {t(key)}
                 {active && (
                   <span className="absolute left-3 right-3 -bottom-[2px] h-0.5 rounded-full bg-[#DC2626]" />
                 )}
@@ -82,28 +86,30 @@ export default function Navbar() {
             href="/create"
             className="ml-3 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-full hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            Create Poll
+            {t('nav.create')}
           </Link>
+
+          <div className="ml-2"><LanguageToggle /></div>
 
           {user ? (
             <div className="ml-2 flex items-center gap-2">
               {profile && (
                 <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full">
                   <Star size={11} strokeWidth={2.5} />
-                  <span>{profile.points.toLocaleString()} tokens</span>
+                  <span>{profile.points.toLocaleString()} {t('lb.tokens')}</span>
                 </div>
               )}
               <Link
                 href="/profile"
                 className="text-sm font-medium text-foreground max-w-[120px] truncate hover:text-primary transition-colors"
-                title="View profile"
+                title={t('nav.profile')}
               >
                 {displayName}
               </Link>
               <button
                 onClick={signOut}
                 className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title="Sign out"
+                title={t('nav.logout')}
               >
                 <LogOut size={16} />
               </button>
@@ -113,12 +119,12 @@ export default function Navbar() {
               href="/login"
               className="ml-1 text-sm font-medium px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150"
             >
-              Login
+              {t('nav.login')}
             </Link>
           )}
         </div>
 
-        {/* Mobile right — points pill + create + hamburger (all 44×44px) */}
+        {/* Mobile right — points pill + create + hamburger */}
         <div className="md:hidden flex items-center gap-1.5">
           {profile && (
             <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full leading-none">
@@ -133,7 +139,7 @@ export default function Navbar() {
           <Link
             href="/create"
             onClick={() => setOpen(false)}
-            aria-label="Create poll"
+            aria-label={t('nav.create')}
             className="flex items-center justify-center w-11 h-11 rounded-full bg-primary text-white hover:bg-primary-dark active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <Plus size={19} strokeWidth={2.5} />
@@ -152,7 +158,11 @@ export default function Navbar() {
       {/* Mobile drawer */}
       {open && (
         <div className="md:hidden border-t border-border bg-card px-4 py-2 flex flex-col">
-          {NAV_LINKS.map(({ href, label }) => (
+          <div className="flex justify-between items-center px-3 py-2">
+            <span className="text-xs text-muted-foreground">Language</span>
+            <LanguageToggle />
+          </div>
+          {NAV_LINKS.map(({ href, key }) => (
             <Link
               key={href}
               href={href}
@@ -163,14 +173,14 @@ export default function Navbar() {
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
-              {label}
+              {t(key)}
             </Link>
           ))}
           {user ? (
             <>
               {displayName && (
                 <p className="px-3 py-2 text-xs text-muted-foreground">
-                  Signed in as{' '}
+                  {t('nav.signedInAs')}{' '}
                   <span className="font-semibold text-foreground">{displayName}</span>
                 </p>
               )}
@@ -183,13 +193,13 @@ export default function Navbar() {
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 }`}
               >
-                <UserIcon size={15} /> Profile
+                <UserIcon size={15} /> {t('nav.profile')}
               </Link>
               <button
                 onClick={() => { signOut(); setOpen(false) }}
                 className="flex items-center gap-2.5 text-sm font-medium px-3 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left w-full"
               >
-                <LogOut size={15} /> Sign out
+                <LogOut size={15} /> {t('nav.logout')}
               </button>
             </>
           ) : (
@@ -198,7 +208,7 @@ export default function Navbar() {
               onClick={() => setOpen(false)}
               className="flex items-center text-sm font-medium px-3 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              Login
+              {t('nav.login')}
             </Link>
           )}
         </div>

@@ -36,6 +36,7 @@ export interface Poll {
   created_by: string | null
   expires_at: string
   total_votes: number
+  is_hot_take: boolean
   created_at: string
   profile: Profile | null
   options: PollOption[]
