@@ -242,7 +242,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}
-                  placeholder="Add a comment (optional)"
+                  placeholder="Add a comment... (optional)"
                   rows={3}
                   maxLength={MAX_COMMENT}
                   className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
@@ -304,7 +304,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       )}
 
       {/* Comments feed */}
-      {comments.length > 0 && <CommentsFeed comments={comments} />}
+      <CommentsFeed comments={comments} />
     </div>
   )
 }
@@ -373,6 +373,12 @@ function CommentsFeed({ comments }: { comments: PollComment[] }) {
         Comments
         <span className="text-muted-foreground font-normal">({comments.length})</span>
       </h2>
+
+      {comments.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">
+          No comments yet. Be the first!
+        </p>
+      ) : (
       <div className="flex flex-col gap-4">
         {comments.map((c) => {
           const name = c.username ?? c.full_name ?? 'Anonymous'
@@ -399,6 +405,7 @@ function CommentsFeed({ comments }: { comments: PollComment[] }) {
           )
         })}
       </div>
+      )}
     </div>
   )
 }
