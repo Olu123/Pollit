@@ -64,10 +64,10 @@ export default async function HomePage({
       <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div>
           <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-tight">
-            The Voice of <span className="text-primary">Nigeria</span>
+            <span className="text-primary">Nigeria:</span> Have your say. Pave the way. Save the day.
           </h1>
           <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-lg">
-            Vote on polls that matter — from politics and sports to entertainment and everyday life.
+            Join thousands of Nigerians sharing opinions on politics, sports, entertainment and everyday life.
           </p>
           <div className="mt-4 flex items-center gap-5 text-sm">
             <div className="flex items-center gap-1.5">
