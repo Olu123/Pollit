@@ -40,5 +40,14 @@ export interface Vote {
   poll_id: string
   option_id: string
   user_id: string
+  comment: string | null
   created_at: string
+}
+
+export interface PollComment {
+  id: string
+  comment: string
+  created_at: string
+  username: string | null
+  full_name: string | null
 }

@@ -77,7 +77,7 @@ export default function Navbar() {
               {profile && (
                 <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full">
                   <Star size={11} strokeWidth={2.5} />
-                  <span>{profile.points.toLocaleString()} pts</span>
+                  <span>{profile.points.toLocaleString()} tokens</span>
                 </div>
               )}
               <span className="text-sm font-medium text-foreground max-w-[120px] truncate">

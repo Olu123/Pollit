@@ -42,9 +42,16 @@ create table if not exists public.votes (
   poll_id    uuid references public.polls(id) on delete cascade not null,
   option_id  uuid references public.poll_options(id) on delete cascade not null,
   user_id    uuid references public.profiles(id) on delete cascade not null,
+  comment    text,
   created_at timestamptz not null default now(),
   unique(poll_id, user_id)
 );
+
+-- For existing databases: add the optional comment column + length guard.
+alter table public.votes add column if not exists comment text;
+alter table public.votes drop constraint if exists votes_comment_len;
+alter table public.votes add constraint votes_comment_len
+  check (comment is null or char_length(comment) <= 280);
 
 -- ── Indexes ──────────────────────────────────────────────────
 
@@ -82,18 +89,32 @@ create policy "votes_read"   on public.votes for select using (true);
 create policy "votes_insert" on public.votes for insert with check (auth.uid() = user_id);
 
 -- ── RPC: cast_vote ────────────────────────────────────────────
--- Atomically inserts a vote, increments counts, awards 10 pts.
+-- Atomically inserts a vote (with optional comment), increments
+-- counts, awards 10 tokens.
 
-create or replace function public.cast_vote(p_poll_id uuid, p_option_id uuid)
+-- Drop the old 2-arg signature so PostgREST resolves to the new one.
+drop function if exists public.cast_vote(uuid, uuid);
+drop function if exists public.cast_vote(uuid, uuid, text);
+
+create or replace function public.cast_vote(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null
+)
 returns jsonb
 language plpgsql security definer set search_path = public
 as $$
-declare v_uid uuid := auth.uid();
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
 
-  insert into votes (poll_id, option_id, user_id)
-  values (p_poll_id, p_option_id, v_uid);
+  insert into votes (poll_id, option_id, user_id, comment)
+  values (p_poll_id, p_option_id, v_uid, v_comment);
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
@@ -106,7 +127,7 @@ end;
 $$;
 
 -- ── RPC: create_poll ──────────────────────────────────────────
--- Atomically creates a poll + options, awards 50 pts.
+-- Atomically creates a poll + options, awards 30 tokens.
 
 create or replace function public.create_poll(
   p_question  text,
@@ -134,7 +155,7 @@ begin
     values (v_poll_id, p_options[v_idx], v_idx);
   end loop;
 
-  update profiles set points = points + 50, updated_at = now() where id = v_uid;
+  update profiles set points = points + 30, updated_at = now() where id = v_uid;
 
   return v_poll_id;
 end;
@@ -173,3 +194,4 @@ create trigger on_auth_user_created
 
 alter publication supabase_realtime add table public.poll_options;
 alter publication supabase_realtime add table public.polls;
+alter publication supabase_realtime add table public.votes;

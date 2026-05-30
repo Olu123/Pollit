@@ -74,7 +74,7 @@ export default function CreatePollPage() {
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">Create a Poll</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
-          Ask Nigeria. Earn <span className="text-primary font-semibold">+50 points</span> for creating a poll.
+          Ask Nigeria. Earn <span className="text-primary font-semibold">+30 tokens</span> for creating a poll.
         </p>
       </div>
 
@@ -198,7 +198,7 @@ export default function CreatePollPage() {
             {busy ? (
               <><Loader2 size={17} className="animate-spin" /> Publishing…</>
             ) : (
-              'Publish Poll (+50 pts)'
+              'Publish Poll (+30 tokens)'
             )}
           </button>
         </div>
