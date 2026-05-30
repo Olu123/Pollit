@@ -32,7 +32,7 @@ const share = {
   },
 }
 
-// ── Styles ────────────────────────────────────────────────────
+// ── Styles / helpers ──────────────────────────────────────────
 
 const CATEGORY_STYLES: Record<PollCategory, string> = {
   Politics:      'bg-red-100 text-red-700',
@@ -40,6 +40,16 @@ const CATEGORY_STYLES: Record<PollCategory, string> = {
   Entertainment: 'bg-violet-100 text-violet-700',
   Business:      'bg-amber-100 text-amber-700',
   Lifestyle:     'bg-pink-100 text-pink-700',
+}
+
+const AVATAR_PALETTE = [
+  '#16a34a', '#2563eb', '#7c3aed', '#dc2626',
+  '#ea580c', '#0891b2', '#be185d', '#0d9488',
+]
+function avatarColor(seed: string) {
+  let h = 0
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
+  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length]
 }
 
 function timeRemaining(expiresAt: string): string {
@@ -53,26 +63,40 @@ function timeRemaining(expiresAt: string): string {
   return `${mins}m left`
 }
 
+// Colour-coded: green = plenty (>24h), amber = ending soon (<24h), red = last hour.
+function timeColor(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now()
+  if (diff <= 0) return 'text-muted-foreground'
+  const hours = diff / 3_600_000
+  if (hours <= 1) return 'text-red-600'
+  if (hours <= 24) return 'text-amber-600'
+  return 'text-primary'
+}
+
 function fmtVotes(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
 
 // ── Card ─────────────────────────────────────────────────────
 
-export default function PollCard({ poll }: { poll: Poll }) {
+export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: number }) {
   const sorted = [...poll.options].sort((a, b) => b.vote_count - a.vote_count)
   const top    = sorted.slice(0, 2)
   const total  = poll.options.reduce((s, o) => s + o.vote_count, 0) || poll.total_votes
+  const creator = poll.profile?.username ?? null
 
   return (
-    <article className="bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow duration-200 p-4 sm:p-5 flex flex-col gap-3.5">
+    <article
+      className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3.5 animate-fade-in-up"
+      style={{ animationDelay: `${Math.min(index, 9) * 60}ms` }}
+    >
       {/* Category + time */}
       <div className="flex items-center justify-between gap-2">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${CATEGORY_STYLES[poll.category]}`}>
           {poll.category}
         </span>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-          <Clock size={11} strokeWidth={2} />
+        <div className={`flex items-center gap-1 text-xs font-medium shrink-0 ${timeColor(poll.expires_at)}`}>
+          <Clock size={11} strokeWidth={2.5} />
           <span>{timeRemaining(poll.expires_at)}</span>
         </div>
       </div>
@@ -82,7 +106,7 @@ export default function PollCard({ poll }: { poll: Poll }) {
         {poll.question}
       </h3>
 
-      {/* Top 2 progress bars */}
+      {/* Top 2 progress bars (animated fill) */}
       <div className="flex flex-col gap-2.5">
         {top.map((opt) => {
           const pct = total > 0 ? Math.round((opt.vote_count / total) * 100) : 0
@@ -94,7 +118,7 @@ export default function PollCard({ poll }: { poll: Poll }) {
               </div>
               <div className="h-2 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-500"
+                  className="h-full rounded-full bg-primary animate-bar"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -103,14 +127,28 @@ export default function PollCard({ poll }: { poll: Poll }) {
         })}
       </div>
 
+      {/* Creator */}
+      {creator && (
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 select-none"
+            style={{ backgroundColor: avatarColor(creator) }}
+            aria-hidden="true"
+          >
+            {creator.slice(0, 2).toUpperCase()}
+          </span>
+          <span className="text-muted-foreground truncate">@{creator}</span>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="mt-auto pt-3 border-t border-border flex flex-col gap-2.5">
-        {/* Row 1: vote count + Vote CTA */}
+        {/* Row 1: prominent vote badge + Vote CTA */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Users size={13} strokeWidth={2} />
-            <span>{fmtVotes(poll.total_votes)} votes</span>
-          </div>
+          <span className="inline-flex items-center gap-1.5 bg-primary-light text-primary text-xs font-bold px-3 py-1.5 rounded-full">
+            <Users size={13} strokeWidth={2.5} />
+            {fmtVotes(poll.total_votes)} votes
+          </span>
           <Link
             href={`/polls/${poll.id}`}
             className="flex items-center justify-center h-11 px-6 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"

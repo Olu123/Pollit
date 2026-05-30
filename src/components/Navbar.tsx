@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
+  { href: '/pulse', label: 'Pulse' },
   { href: '/leaderboard', label: 'Leaderboard' },
 ]
 
@@ -16,7 +17,15 @@ export default function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const { user, profile } = useAuth()
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const displayName =
     profile?.username ??
@@ -32,15 +41,15 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
+    <nav
+      className={`sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-shadow duration-300 ${
+        scrolled ? 'shadow-sm' : ''
+      }`}
+    >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
 
         {/* Logo */}
-        <Link
-          href="/"
-          className="flex items-center gap-2 shrink-0"
-          onClick={() => setOpen(false)}
-        >
+        <Link href="/" className="flex items-center gap-2 shrink-0" onClick={() => setOpen(false)}>
           <div className="w-8 h-8 bg-[#DC2626] rounded-lg flex items-center justify-center">
             <BarChart2 size={16} className="text-white" strokeWidth={2.5} />
           </div>
@@ -52,22 +61,26 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-150 ${
-                pathname === href
-                  ? 'text-primary bg-primary-light'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          {NAV_LINKS.map(({ href, label }) => {
+            const active = pathname === href
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`relative text-sm font-medium px-3 py-2 transition-colors duration-150 ${
+                  active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+                {active && (
+                  <span className="absolute left-3 right-3 -bottom-[2px] h-0.5 rounded-full bg-[#DC2626]" />
+                )}
+              </Link>
+            )
+          })}
           <Link
             href="/create"
-            className="ml-3 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-full hover:bg-primary-dark transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="ml-3 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-full hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             Create Poll
           </Link>

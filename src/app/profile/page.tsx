@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import {
-  Loader2, Save, Star, BarChart2, CheckSquare, Lock, Mail, CheckCircle2,
+  Loader2, Save, Star, BarChart2, CheckSquare, Lock, Mail, CheckCircle2, Pencil, X,
 } from 'lucide-react'
 import type { PollCategory } from '@/lib/types'
 
@@ -51,6 +51,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
   const [saved, setSaved]   = useState(false)
+  const [editing, setEditing] = useState(false)
 
   // Editable fields
   const [username, setUsername]   = useState('')
@@ -146,6 +147,7 @@ export default function ProfilePage() {
 
     setSaving(false)
     setSaved(true)
+    setEditing(false)
     router.refresh()
     setTimeout(() => setSaved(false), 3000)
   }
@@ -162,20 +164,23 @@ export default function ProfilePage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-black shrink-0 select-none"
-          style={{ backgroundColor: avatarColor(user.id) }}
-          aria-hidden="true"
-        >
-          {initials}
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-black text-foreground truncate">
-            {username ? `@${username}` : 'Your profile'}
-          </h1>
-          <p className="text-sm text-muted-foreground">Manage your Pollit account</p>
+      {/* Cover photo + overlapping avatar */}
+      <div>
+        <div className="h-28 sm:h-32 rounded-xl bg-gradient-to-br from-[#DC2626] via-[#e23b3b] to-[#b91c1c] shadow-sm" />
+        <div className="flex items-end gap-4 -mt-10 px-2">
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black shrink-0 select-none ring-4 ring-background"
+            style={{ backgroundColor: avatarColor(user.id) }}
+            aria-hidden="true"
+          >
+            {initials}
+          </div>
+          <div className="min-w-0 pb-1">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground truncate">
+              {username ? `@${username}` : 'Your profile'}
+            </h1>
+            <p className="text-sm text-muted-foreground">Manage your Pollit account</p>
+          </div>
         </div>
       </div>
 
@@ -186,9 +191,30 @@ export default function ProfilePage() {
         <StatCard icon={CheckSquare} label="Votes"  value={stats.votesCast} />
       </div>
 
-      {/* Edit form */}
+      {/* Profile details — view / edit toggle */}
       <form onSubmit={handleSave} className="bg-card border border-border rounded-2xl p-4 sm:p-6 flex flex-col gap-5">
-        <h2 className="text-lg font-bold text-foreground">Edit profile</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-foreground">Profile details</h2>
+          {editing ? (
+            <button
+              type="button"
+              onClick={() => { setEditing(false); setError(''); loadAll() }}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground px-3 min-h-[40px] rounded-full hover:bg-muted transition-colors"
+            >
+              <X size={15} /> Cancel
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-dark px-3 min-h-[40px] rounded-full hover:bg-primary-light transition-colors"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+          )}
+        </div>
+
+        <fieldset disabled={!editing} className="contents">
 
         {/* Username */}
         <Field label="Username" required hint="This is shown publicly (e.g. @lagos_boy).">
@@ -279,6 +305,8 @@ export default function ProfilePage() {
           <p className="text-xs text-muted-foreground mt-1 text-right tabular-nums">{bio.length}/{MAX_BIO}</p>
         </Field>
 
+        </fieldset>
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>
         )}
@@ -288,13 +316,15 @@ export default function ProfilePage() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60"
-        >
-          {saving ? <><Loader2 size={17} className="animate-spin" /> Saving…</> : <><Save size={17} /> Save changes</>}
-        </button>
+        {editing && (
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60"
+          >
+            {saving ? <><Loader2 size={17} className="animate-spin" /> Saving…</> : <><Save size={17} /> Save changes</>}
+          </button>
+        )}
       </form>
 
       {/* Recent activity */}

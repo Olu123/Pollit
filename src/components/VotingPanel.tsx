@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase'
 import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle } from 'lucide-react'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
+import Confetti from './Confetti'
+import { enqueueVote } from '@/lib/voteQueue'
 
 function timeRemaining(expiresAt: string) {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -66,6 +68,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [voting, setVoting]        = useState(false)
   const [voteError, setVoteError]  = useState('')
   const [comments, setComments]    = useState<PollComment[]>([])
+  const [confetti, setConfetti]    = useState(false)
 
   const isExpired   = new Date(poll.expires_at).getTime() <= Date.now()
   const showResults = !!votedOptionId || isExpired || !user
@@ -140,15 +143,42 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     return () => { supabase.removeChannel(channel) }
   }, [poll.id, loadComments])
 
+  function applyVoted(optionId: string) {
+    setVoted(optionId)
+    setConfetti(true)
+    setPoll((prev) => ({
+      ...prev,
+      total_votes: prev.total_votes + 1,
+      options: prev.options.map((o) =>
+        o.id === optionId ? { ...o, vote_count: o.vote_count + 1 } : o
+      ),
+    }))
+  }
+
   async function submitVote() {
     if (!user || !selectedId) return
+    const optionId = selectedId
+    const text = comment.trim() || null
     setVoting(true)
     setVoteError('')
 
+    // Offline → queue the vote and register background sync; confirm optimistically.
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      enqueueVote({ poll_id: poll.id, option_id: optionId, comment: text })
+      try {
+        const reg = await navigator.serviceWorker?.ready
+        // @ts-expect-error - background sync isn't in the TS DOM lib yet
+        await reg?.sync?.register('sync-votes')
+      } catch { /* sync unsupported — flush happens on reconnect */ }
+      applyVoted(optionId)
+      setVoting(false)
+      return
+    }
+
     const { error } = await supabase.rpc('cast_vote', {
       p_poll_id:   poll.id,
-      p_option_id: selectedId,
-      p_comment:   comment.trim() || null,
+      p_option_id: optionId,
+      p_comment:   text,
     })
 
     if (error) {
@@ -161,16 +191,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       return
     }
 
-    setVoted(selectedId)
-    setPoll((prev) => ({
-      ...prev,
-      total_votes: prev.total_votes + 1,
-      options: prev.options.map((o) =>
-        o.id === selectedId ? { ...o, vote_count: o.vote_count + 1 } : o
-      ),
-    }))
+    applyVoted(optionId)
     setVoting(false)
-    if (comment.trim()) loadComments()
+    if (text) loadComments()
   }
 
   // Results sorted by vote count descending
@@ -191,6 +214,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
   return (
     <div className="flex flex-col gap-5">
+      {confetti && <Confetti />}
       {/* Poll meta row */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[poll.category] ?? 'bg-muted text-muted-foreground'}`}>
@@ -345,7 +369,7 @@ function ResultsBars({
             </div>
             <div className="h-3 rounded-full bg-muted overflow-hidden">
               <div
-                className={`h-full rounded-full transition-[width] duration-700 ease-out ${isVoted ? 'bg-primary' : 'bg-primary/30'}`}
+                className={`h-full rounded-full animate-bar ${isVoted ? 'bg-primary' : 'bg-primary/30'}`}
                 style={{ width: `${opt.pct}%` }}
               />
             </div>

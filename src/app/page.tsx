@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { TrendingUp, Plus } from 'lucide-react'
+import { TrendingUp, Plus, Users, BarChart2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import PollCard from '@/components/PollCard'
 import type { Poll, PollCategory } from '@/lib/types'
@@ -34,17 +34,21 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
   return (data ?? []) as unknown as Poll[]
 }
 
-async function getTotals(): Promise<{ pollCount: number; voteCount: number }> {
-  const { data } = await supabase
-    .from('polls')
-    .select('total_votes')
-    .limit(1000)
+async function getTotals(): Promise<{ pollCount: number; voteCount: number; userCount: number }> {
+  const [{ data: polls }, { count: userCount }] = await Promise.all([
+    supabase.from('polls').select('total_votes').limit(1000),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }),
+  ])
 
-  if (!data) return { pollCount: 0, voteCount: 0 }
   return {
-    pollCount: data.length,
-    voteCount: data.reduce((s, p) => s + (p.total_votes ?? 0), 0),
+    pollCount: polls?.length ?? 0,
+    voteCount: (polls ?? []).reduce((s, p) => s + (p.total_votes ?? 0), 0),
+    userCount: userCount ?? 0,
   }
+}
+
+function fmt(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
 
 export default async function HomePage({
@@ -63,32 +67,15 @@ export default async function HomePage({
       {/* Hero */}
       <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-tight">
-            <span className="text-primary">Nigeria:</span> Have your say. Pave the way. Save the day.
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+            <span className="bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent">
+              Nigeria:
+            </span>{' '}
+            <span className="text-foreground">Have your say. Pave the way. Save the day.</span>
           </h1>
           <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-lg">
             Join thousands of Nigerians sharing opinions on politics, sports, entertainment and everyday life.
           </p>
-          <div className="mt-4 flex items-center gap-5 text-sm">
-            <div className="flex items-center gap-1.5">
-              <TrendingUp size={14} className="text-primary" strokeWidth={2.5} />
-              <span className="font-semibold text-foreground">{totals.pollCount}</span>
-              <span className="text-muted-foreground">active polls</span>
-            </div>
-            {totals.voteCount > 0 && (
-              <>
-                <div className="w-px h-4 bg-border" />
-                <div>
-                  <span className="font-semibold text-foreground">
-                    {totals.voteCount >= 1000
-                      ? `${(totals.voteCount / 1000).toFixed(1)}k`
-                      : totals.voteCount}
-                  </span>{' '}
-                  <span className="text-muted-foreground">total votes</span>
-                </div>
-              </>
-            )}
-          </div>
         </div>
         <Link
           href="/create"
@@ -98,6 +85,13 @@ export default async function HomePage({
           Create Poll
         </Link>
       </section>
+
+      {/* Live stats bar */}
+      <div className="grid grid-cols-3 rounded-xl border border-border bg-card shadow-sm divide-x divide-border">
+        <Stat icon={<BarChart2 size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.pollCount)} label="polls created" />
+        <Stat icon={<TrendingUp size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.voteCount)} label="votes cast" />
+        <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label="users" />
+      </div>
 
       {/* Category tabs */}
       <div
@@ -116,7 +110,7 @@ export default async function HomePage({
               aria-selected={isActive}
               className={`shrink-0 flex items-center text-sm font-semibold px-4 min-h-[44px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
                 isActive
-                  ? 'bg-primary text-white shadow-sm'
+                  ? 'bg-primary text-white shadow-md shadow-primary/30'
                   : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-border'
               }`}
             >
@@ -129,24 +123,46 @@ export default async function HomePage({
       {/* Grid */}
       {polls.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {polls.map((poll) => (
-            <PollCard key={poll.id} poll={poll} />
+          {polls.map((poll, i) => (
+            <PollCard key={poll.id} poll={poll} index={i} />
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-          <p className="font-bold text-lg text-foreground">
-            {active === 'All' ? 'No polls yet' : `No polls in ${active} yet`}
-          </p>
-          <p className="text-sm text-muted-foreground">Be the first to start the conversation.</p>
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center animate-fade-in">
+          <div className="w-20 h-20 rounded-2xl bg-primary-light flex items-center justify-center">
+            <BarChart2 size={36} className="text-primary" strokeWidth={2} />
+          </div>
+          <div>
+            <p className="font-bold text-lg text-foreground">
+              {active === 'All' ? 'No polls yet' : `No polls in ${active} yet`}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {active === 'All'
+                ? 'Be the first to start the conversation.'
+                : `Start the first ${active} poll and get the debate going.`}
+            </p>
+          </div>
           <Link
             href="/create"
-            className="mt-2 inline-flex items-center bg-primary text-white text-sm font-semibold px-5 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
+            className="mt-1 inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
           >
+            <Plus size={16} strokeWidth={2.5} />
             Create a Poll
           </Link>
         </div>
       )}
     </main>
+  )
+}
+
+function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-3 px-2 gap-0.5 text-center">
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <span className="text-lg font-black text-foreground tabular-nums leading-none">{value}</span>
+      </div>
+      <span className="text-[11px] sm:text-xs text-muted-foreground">{label}</span>
+    </div>
   )
 }

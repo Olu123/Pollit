@@ -18,6 +18,16 @@ const EXPIRY_OPTIONS = [
   { label: '30 days',  days: 30 },
 ]
 
+const CATEGORY_STYLES: Record<PollCategory, string> = {
+  Politics:      'bg-red-100 text-red-700',
+  Sports:        'bg-blue-100 text-blue-700',
+  Entertainment: 'bg-violet-100 text-violet-700',
+  Business:      'bg-amber-100 text-amber-700',
+  Lifestyle:     'bg-pink-100 text-pink-700',
+}
+
+const STEPS = ['Question', 'Options', 'Settings']
+
 export default function CreatePollPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
@@ -67,16 +77,22 @@ export default function CreatePollPage() {
     router.push(`/polls/${pollId}`)
   }
 
+  const filledOptions = options.map((o) => o.trim()).filter(Boolean)
+  const step = !question.trim() ? 1 : filledOptions.length < 2 ? 2 : 3
+
   if (loading || !user) return null
 
   return (
     <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="mb-6 sm:mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">Create a Poll</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
           Ask Nigeria. Earn <span className="text-primary font-semibold">+30 tokens</span> for creating a poll.
         </p>
       </div>
+
+      {/* Step indicator */}
+      <StepIndicator current={step} />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
         {/* Question */}
@@ -123,7 +139,7 @@ export default function CreatePollPage() {
           </label>
           <div className="flex flex-col gap-2.5">
             {options.map((opt, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex items-center gap-2 animate-fade-in-up">
                 <span className="text-xs font-bold text-muted-foreground w-5 shrink-0 text-center select-none">
                   {i + 1}
                 </span>
@@ -182,6 +198,12 @@ export default function CreatePollPage() {
           </div>
         </div>
 
+        {/* Live preview */}
+        <div>
+          <label className="block text-sm font-semibold text-foreground mb-2">Live preview</label>
+          <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} />
+        </div>
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
             {error}
@@ -204,5 +226,72 @@ export default function CreatePollPage() {
         </div>
       </form>
     </main>
+  )
+}
+
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="flex items-center mb-6">
+      {STEPS.map((label, i) => {
+        const n = i + 1
+        const done = n < current
+        const active = n === current
+        return (
+          <div key={label} className="flex items-center flex-1 last:flex-none">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  done || active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {done ? '✓' : n}
+              </div>
+              <span className={`text-xs font-semibold hidden sm:inline ${active ? 'text-foreground' : 'text-muted-foreground'}`}>
+                {label}
+              </span>
+            </div>
+            {n < STEPS.length && (
+              <div className={`flex-1 h-0.5 mx-2 rounded-full transition-colors ${done ? 'bg-primary' : 'bg-border'}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PreviewCard({
+  question, category, options, expiryDays,
+}: {
+  question: string
+  category: PollCategory
+  options: string[]
+  expiryDays: number
+}) {
+  const opts = options.length ? options : ['Option 1', 'Option 2']
+  const empty = options.length === 0
+  return (
+    <div className="bg-card rounded-xl border border-border shadow-sm p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[category]}`}>{category}</span>
+        <span className="text-xs text-muted-foreground">{expiryDays}d left</span>
+      </div>
+      <h3 className={`font-bold text-[15px] leading-snug ${question.trim() ? 'text-foreground' : 'text-muted-foreground italic'}`}>
+        {question.trim() || 'Your question will appear here…'}
+      </h3>
+      <div className={`flex flex-col gap-2 ${empty ? 'opacity-50' : ''}`}>
+        {opts.slice(0, 2).map((o, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-foreground/75 truncate">{o}</span>
+              <span className="font-semibold text-muted-foreground">0%</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-primary" style={{ width: '0%' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -66,19 +66,19 @@ export default function LoginPage() {
     <main className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 bg-[#DC2626] rounded-2xl flex items-center justify-center shadow-lg">
-            <BarChart2 size={28} className="text-white" strokeWidth={2.5} />
+        <div className="flex flex-col items-center gap-4 mb-8">
+          <div className="w-20 h-20 bg-gradient-to-br from-[#DC2626] to-[#b91c1c] rounded-3xl flex items-center justify-center shadow-xl shadow-[#DC2626]/20">
+            <BarChart2 size={40} className="text-white" strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black text-foreground">
-              Welcome to <span className="text-foreground">Poll</span><span className="text-[#DC2626]">it</span>
+            <h1 className="text-2xl font-black">
+              Welcome to <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+        <div className="bg-gradient-to-b from-card to-muted/40 border border-border rounded-2xl p-6 shadow-md flex flex-col gap-4">
           {step === 'choose' && (
             <>
               <button
