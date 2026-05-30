@@ -41,12 +41,12 @@ export default function Navbar() {
           className="flex items-center gap-2 shrink-0"
           onClick={() => setOpen(false)}
         >
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-[#DC2626] rounded-lg flex items-center justify-center">
             <BarChart2 size={16} className="text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-xl font-black text-foreground tracking-tight">Agora</span>
-          <span className="hidden sm:inline-block text-xs font-semibold bg-primary-light text-primary px-2 py-0.5 rounded-full leading-none">
-            NG
+          <span className="text-xl font-black tracking-tight">
+            <span className="text-foreground">Poll</span>
+            <span className="text-[#DC2626]">+it</span>
           </span>
         </Link>
 

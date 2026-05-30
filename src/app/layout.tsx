@@ -7,10 +7,10 @@ import { AuthProvider } from '@/components/AuthProvider'
 const geist = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "Agora — Nigeria's Polling Platform",
+  title: 'Pollit — Have your say. Pave the way.',
   description:
     'Vote on what matters to Nigerians. Share your opinion on politics, sports, entertainment, business, and more.',
-  keywords: ['Nigeria', 'polling', 'vote', 'opinion', 'Agora'],
+  keywords: ['Nigeria', 'polling', 'vote', 'opinion', 'Pollit'],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Navbar />
           <div className="flex-1">{children}</div>
           <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} Agora NG &mdash; The Voice of Nigeria
+            &copy; {new Date().getFullYear()} Pollit
           </footer>
         </AuthProvider>
       </body>

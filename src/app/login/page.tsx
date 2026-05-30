@@ -67,11 +67,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
+          <div className="w-14 h-14 bg-[#DC2626] rounded-2xl flex items-center justify-center shadow-lg">
             <BarChart2 size={28} className="text-white" strokeWidth={2.5} />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black text-foreground">Welcome to Agora</h1>
+            <h1 className="text-2xl font-black text-foreground">
+              Welcome to <span className="text-foreground">Poll</span><span className="text-[#DC2626]">it</span>
+            </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
           </div>
         </div>
@@ -186,7 +188,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          By continuing you agree to Agora&rsquo;s Terms of Service.
+          By continuing you agree to Pollit&rsquo;s Terms of Service.
         </p>
       </div>
     </main>
