@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart2, Search, Vote, Flame, AlertTriangle, Pin } from 'lucide-react'
+import { BarChart2, Search, Vote, Flame, AlertTriangle } from 'lucide-react'
 import { useLanguage } from './LanguageProvider'
 
 const GUIDELINES = [
@@ -96,14 +96,6 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
                   ? 'Before you start, please ensure your profile reflects your correct details.'
                   : 'Before you start, abeg make sure your profile correct.'}
               </p>
-              <div className="flex items-start gap-3 border-2 border-[#DC2626]/30 bg-[#DC2626]/5 rounded-xl p-4">
-                <Pin size={18} className="text-[#DC2626] shrink-0 mt-0.5" />
-                <p className="text-sm text-foreground/90 leading-relaxed">
-                  {en
-                    ? "Please register your full name exactly as it appears on your official government ID (National ID, passport, driver's licence or voter's card). This is important for identity verification purposes and to ensure your account remains in good standing on Pollit."
-                    : "Abeg make sure you put your correct full name — exactly as e dey on your government ID (National ID, passport, driver's licence or voter's card). This one important for verification and to make sure your account dey okay."}
-                </p>
-              </div>
               <p className="text-xs text-muted-foreground">
                 {en
                   ? 'You can update your profile at any time from your Profile page.'
