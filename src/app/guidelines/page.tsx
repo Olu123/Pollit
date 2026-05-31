@@ -91,27 +91,6 @@ export default function GuidelinesPage() {
         ]} />
       </Section>
 
-      <Section title="Your Profile & Identity">
-        <div className="border-2 border-[#DC2626]/30 bg-[#DC2626]/5 rounded-xl p-4 flex flex-col gap-2">
-          <p>
-            Pollit requires that your registered full name matches your official government identification
-            document exactly.
-          </p>
-          <p className="font-semibold text-foreground">Accepted documents:</p>
-          <List mark="•" items={[
-            'National Identity Card (NIN)',
-            'International Passport',
-            "Driver's Licence",
-            "Permanent Voter's Card (PVC)",
-          ]} />
-          <p>
-            This requirement is in place to maintain the integrity of our platform and to ensure your account
-            remains in good standing. Users found to have provided false identity information may have their
-            accounts permanently suspended.
-          </p>
-        </div>
-      </Section>
-
       <Section title="Tokens & Rewards">
         <List mark="•" items={[
           'You earn 10 tokens per vote',
