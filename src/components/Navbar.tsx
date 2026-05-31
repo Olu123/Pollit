@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon } from 'lucide-react'
+import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
@@ -107,6 +107,15 @@ export default function Navbar() {
               >
                 {displayName}
               </Link>
+              {profile?.is_admin && (
+                <Link
+                  href="/admin/messages"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Admin"
+                >
+                  <Settings size={16} />
+                </Link>
+              )}
               <button
                 onClick={signOut}
                 className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -196,6 +205,19 @@ export default function Navbar() {
               >
                 <UserIcon size={15} /> {t('nav.profile')}
               </Link>
+              {profile?.is_admin && (
+                <Link
+                  href="/admin/messages"
+                  onClick={() => setOpen(false)}
+                  className={`flex items-center gap-2.5 text-sm font-medium px-3 py-3.5 rounded-xl transition-colors ${
+                    pathname === '/admin/messages'
+                      ? 'text-primary bg-primary-light'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <Settings size={15} /> ⚙️ Admin
+                </Link>
+              )}
               <button
                 onClick={() => { signOut(); setOpen(false) }}
                 className="flex items-center gap-2.5 text-sm font-medium px-3 py-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left w-full"

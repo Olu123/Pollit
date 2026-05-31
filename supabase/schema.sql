@@ -143,6 +143,40 @@ create policy "reports_read_admin" on public.reports for select using (
   exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
 );
 
+-- ── Contact messages ──────────────────────────────────────────
+
+create table if not exists public.contact_messages (
+  id         uuid default gen_random_uuid() primary key,
+  name       text not null,
+  email      text not null,
+  subject    text not null,
+  message    text not null,
+  username   text,
+  user_id    uuid references public.profiles(id),
+  status     text default 'unread',
+  created_at timestamptz default now()
+);
+
+alter table public.contact_messages enable row level security;
+
+create policy "anyone_can_contact" on public.contact_messages for insert with check (true);
+create policy "admins_can_read_messages" on public.contact_messages for select using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+create policy "admins_can_update_messages" on public.contact_messages for update using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
+-- Lets the contact API rate-limit by email without exposing the table.
+create or replace function public.count_recent_contacts(p_email text)
+returns integer
+language sql security definer set search_path = public
+as $$
+  select count(*)::int
+  from contact_messages
+  where email = p_email and created_at > now() - interval '1 hour';
+$$;
+
 -- ── RPC: cast_vote ────────────────────────────────────────────
 -- Atomically inserts a vote (with optional comment), increments
 -- counts, awards 10 tokens.

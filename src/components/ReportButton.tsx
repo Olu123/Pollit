@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Flag, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
@@ -100,6 +101,10 @@ export default function ReportButton({
                 {busy ? <Loader2 size={16} className="animate-spin" /> : 'Submit Report'}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              For urgent issues, visit our{' '}
+              <Link href="/contact" onClick={() => setOpen(false)} className="text-primary font-semibold">Contact page</Link>
+            </p>
           </div>
         </div>
       )}

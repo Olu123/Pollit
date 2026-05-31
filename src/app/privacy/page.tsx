@@ -10,7 +10,7 @@ export default function PrivacyPage() {
       <h1 className="text-2xl font-black text-foreground">Privacy Policy</h1>
       <p className="text-sm text-muted-foreground max-w-md">
         Our full privacy policy is coming soon. In the meantime, we only collect what we need to run
-        Pollit and never sell your data. Questions? <a href="mailto:hello@pollit.ng" className="text-primary font-semibold">hello@pollit.ng</a>
+        Pollit and never sell your data. Questions? <Link href="/contact" className="text-primary font-semibold">Contact us</Link>
       </p>
       <Link href="/guidelines" className="text-sm font-semibold text-primary hover:text-primary-dark">
         Read our Community Guidelines →

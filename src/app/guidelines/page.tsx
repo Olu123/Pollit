@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Community Guidelines — Pollit',
@@ -137,7 +138,7 @@ export default function GuidelinesPage() {
         <p>
           To report a poll, comment or user, use the report button (⚑) on any poll or comment.
         </p>
-        <p>For other enquiries: <a href="mailto:hello@pollit.ng" className="text-primary font-semibold">hello@pollit.ng</a></p>
+        <p>Have a question or concern? <Link href="/contact" className="text-primary font-semibold">Use our Contact form.</Link></p>
       </Section>
 
       <p className="text-xs text-muted-foreground border-t border-border pt-4">
