@@ -45,6 +45,8 @@ function emailHtml(d: { name: string; email: string; username: string; subject: 
 }
 
 export async function POST(request: Request) {
+  console.log('[contact] route hit')
+
   let body: Record<string, string>
   try {
     body = await request.json()
@@ -84,14 +86,19 @@ export async function POST(request: Request) {
     name, email, subject, message, username, user_id: userId,
   })
   if (dbError) {
+    console.error('[contact] supabase insert error:', dbError)
     return NextResponse.json({ error: 'Could not save your message. Please try again.' }, { status: 500 })
   }
+  console.log('[contact] message saved to supabase')
 
   // Send notification email (non-fatal if it fails / no key configured)
-  if (process.env.RESEND_API_KEY) {
+  const hasResendKey = !!process.env.RESEND_API_KEY
+  console.log('[contact] RESEND_API_KEY defined:', hasResendKey)
+
+  if (hasResendKey) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
-      await resend.emails.send({
+      const sendResult = await resend.emails.send({
         from: 'Pollit <onboarding@resend.dev>',
         to: NOTIFY_TO,
         replyTo: email,
@@ -101,8 +108,9 @@ export async function POST(request: Request) {
           date: new Date().toUTCString(),
         }),
       })
+      console.log('[contact] resend result:', JSON.stringify(sendResult))
     } catch (e) {
-      console.error('[contact] email send failed:', e)
+      console.error('[contact] resend exception:', e)
     }
   }
 
