@@ -31,6 +31,7 @@ alter table public.profiles add column if not exists bio             text;
 alter table public.profiles add column if not exists state_of_origin text;
 alter table public.profiles add column if not exists referred_by     uuid references public.profiles(id);
 alter table public.profiles add column if not exists referral_count  integer default 0;
+alter table public.profiles add column if not exists is_admin        boolean default false;
 
 create table if not exists public.polls (
   id          uuid default gen_random_uuid() primary key,
@@ -55,7 +56,9 @@ alter table public.polls add column if not exists is_community       boolean def
 alter table public.polls add column if not exists community_name     text;
 alter table public.polls add column if not exists community_code     text;
 alter table public.polls add column if not exists community_password text;
+alter table public.polls add column if not exists deleted_at         timestamptz;
 create index if not exists polls_community_code_idx on public.polls(community_code);
+create index if not exists polls_deleted_at_idx     on public.polls(deleted_at);
 
 create table if not exists public.poll_options (
   id            uuid default gen_random_uuid() primary key,
@@ -80,6 +83,8 @@ create table if not exists public.votes (
 -- For existing databases: add the optional comment + state columns.
 alter table public.votes add column if not exists comment text;
 alter table public.votes add column if not exists state   text;
+alter table public.votes add column if not exists changed_at          timestamptz;
+alter table public.votes add column if not exists original_option_id  uuid references public.poll_options(id);
 alter table public.votes drop constraint if exists votes_comment_len;
 alter table public.votes add constraint votes_comment_len
   check (comment is null or char_length(comment) <= 280);
@@ -108,6 +113,8 @@ create policy "profiles_update" on public.profiles for update using (auth.uid() 
 -- Polls
 create policy "polls_read"   on public.polls for select using (true);
 create policy "polls_insert" on public.polls for insert with check (auth.uid() = created_by);
+drop policy if exists "creators_can_update_polls" on public.polls;
+create policy "creators_can_update_polls" on public.polls for update using (auth.uid() = created_by);
 
 -- Poll options
 create policy "options_read"   on public.poll_options for select using (true);
@@ -245,6 +252,113 @@ begin
    where id = v_ref;
 
   return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- ── RPC: delete_poll (soft delete) ────────────────────────────
+
+create or replace function public.delete_poll(p_poll_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_poll polls%rowtype;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+
+  if v_poll.created_by != v_uid then
+    if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+      raise exception 'not_authorized';
+    end if;
+  end if;
+
+  if v_poll.total_votes >= 10 then
+    raise exception 'too_many_votes';
+  end if;
+
+  update polls set deleted_at = now() where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+-- ── RPC: edit_poll (60-second window) ──────────────────────────
+
+create or replace function public.edit_poll(
+  p_poll_id  uuid,
+  p_question text,
+  p_options  jsonb   -- array of { id: uuid, text: string }
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_poll polls%rowtype;
+  v_option jsonb;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if v_poll.created_by != v_uid then raise exception 'not_authorized'; end if;
+
+  if now() > v_poll.created_at + interval '60 seconds' then
+    raise exception 'edit_window_expired';
+  end if;
+
+  update polls set question = p_question where id = p_poll_id;
+
+  for v_option in select * from jsonb_array_elements(p_options)
+  loop
+    update poll_options
+       set text = v_option->>'text'
+     where id = (v_option->>'id')::uuid
+       and poll_id = p_poll_id;
+  end loop;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+-- ── RPC: change_vote (60-second window) ────────────────────────
+
+create or replace function public.change_vote(
+  p_poll_id       uuid,
+  p_new_option_id uuid
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_vote votes%rowtype;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_vote from votes where poll_id = p_poll_id and user_id = v_uid;
+  if not found then raise exception 'no_vote_found'; end if;
+
+  if now() > v_vote.created_at + interval '60 seconds' then
+    raise exception 'change_window_expired';
+  end if;
+  if v_vote.option_id = p_new_option_id then
+    raise exception 'same_option';
+  end if;
+
+  update poll_options set vote_count = vote_count - 1 where id = v_vote.option_id;
+  update poll_options set vote_count = vote_count + 1 where id = p_new_option_id;
+
+  update votes set
+    option_id = p_new_option_id,
+    original_option_id = coalesce(v_vote.original_option_id, v_vote.option_id),
+    changed_at = now()
+  where poll_id = p_poll_id and user_id = v_uid;
+
+  return jsonb_build_object('success', true);
 end;
 $$;
 

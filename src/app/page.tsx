@@ -25,6 +25,7 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
     .from('polls')
     .select(POLL_SELECT)
     .eq('is_community', false)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -46,6 +47,7 @@ async function getHotTakes(): Promise<Poll[]> {
     .select(POLL_SELECT)
     .eq('is_hot_take', true)
     .eq('is_community', false)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -55,7 +57,7 @@ async function getHotTakes(): Promise<Poll[]> {
 
 async function getTotals(): Promise<{ pollCount: number; voteCount: number; userCount: number }> {
   const [{ data: polls }, { count: userCount }] = await Promise.all([
-    supabase.from('polls').select('total_votes').limit(1000),
+    supabase.from('polls').select('total_votes').is('deleted_at', null).limit(1000),
     supabase.from('profiles').select('id', { count: 'exact', head: true }),
   ])
 

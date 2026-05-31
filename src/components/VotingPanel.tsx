@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin } from 'lucide-react'
+import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
+import { useToast } from './ToastProvider'
 import { enqueueVote } from '@/lib/voteQueue'
 import { NIGERIAN_STATES } from '@/lib/states'
 import { getInsight } from '@/lib/insights'
@@ -64,6 +65,7 @@ const MAX_COMMENT = 280
 export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const { user, profile } = useAuth()
   const { t, lang } = useLanguage()
+  const { showToast } = useToast()
 
   const [poll, setPoll]            = useState(initialPoll)
   const [votedOptionId, setVoted]  = useState<string | null>(null)
@@ -76,6 +78,38 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [comments, setComments]    = useState<PollComment[]>([])
   const [revealing, setRevealing]  = useState(false)
   const [insight, setInsight]      = useState('')
+
+  // Edit window + vote-change window
+  const [nowTs, setNowTs]          = useState(() => Date.now())
+  const [votedAt, setVotedAt]      = useState<number | null>(null)
+  const [editing, setEditing]      = useState(false)
+  const [editQuestion, setEditQuestion] = useState(initialPoll.question)
+  const [editOpts, setEditOpts]    = useState(initialPoll.options.map((o) => ({ id: o.id, text: o.text })))
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [changing, setChanging]    = useState(false)
+  const editClosedRef = useRef(false)
+  const lockedRef = useRef(false)
+  const editWasOpenRef = useRef(false)
+  const changeWasOpenRef = useRef(false)
+
+  const isCreator = !!user && user.id === poll.created_by
+  const createdMs = new Date(poll.created_at).getTime()
+  const editMsLeft = Math.max(0, createdMs + 60_000 - nowTs)
+  const editOpen = isCreator && editMsLeft > 0
+  const changeMsLeft = votedAt ? Math.max(0, votedAt + 60_000 - nowTs) : 0
+  const changeOpen = !!votedOptionId && changeMsLeft > 0
+
+  // 1-second ticker (only while a window could be open)
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  // Track whether each window was ever genuinely open this session, so the
+  // "closed"/"locked" toasts only fire on a real transition (not for polls
+  // already older than 60s when the page loads).
+  useEffect(() => { if (editOpen) editWasOpenRef.current = true }, [editOpen])
+  useEffect(() => { if (changeOpen) changeWasOpenRef.current = true }, [changeOpen])
 
   // Default the state selector from the user's profile (if set).
   useEffect(() => {
@@ -114,12 +148,15 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     if (!user) { setChecked(true); return }
     supabase
       .from('votes')
-      .select('option_id')
+      .select('option_id, created_at')
       .eq('poll_id', poll.id)
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setVoted(data.option_id as string)
+        if (data) {
+          setVoted(data.option_id as string)
+          setVotedAt(new Date(data.created_at as string).getTime())
+        }
         setChecked(true)
       })
   }, [user, poll.id])
@@ -167,6 +204,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       options: newOptions,
     }))
     setVoted(optionId)
+    setVotedAt(Date.now())
 
     // Insight
     const sorted = [...newOptions].sort((a, b) => b.vote_count - a.vote_count)
@@ -244,6 +282,75 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     runResultMoment(optionId)
   }
 
+  // ── Edit window ─────────────────────────────────────────────
+  async function saveEdit() {
+    setSavingEdit(true)
+    const { error } = await supabase.rpc('edit_poll', {
+      p_poll_id: poll.id,
+      p_question: editQuestion.trim() || poll.question,
+      p_options: editOpts.map((o) => ({ id: o.id, text: o.text.trim() || '—' })),
+    })
+    setSavingEdit(false)
+    if (error) {
+      if (error.message.includes('edit_window_expired')) showToast(t('edit.closed'))
+      return
+    }
+    setPoll((prev) => ({
+      ...prev,
+      question: editQuestion.trim() || prev.question,
+      options: prev.options.map((o) => {
+        const e = editOpts.find((x) => x.id === o.id)
+        return e ? { ...o, text: e.text.trim() || o.text } : o
+      }),
+    }))
+    setEditing(false)
+  }
+
+  // Auto-save if the window closes mid-edit, then lock the inputs.
+  useEffect(() => {
+    if (editMsLeft === 0 && editWasOpenRef.current && !editClosedRef.current && isCreator) {
+      editClosedRef.current = true
+      if (editing) { saveEdit(); }
+      setEditing(false)
+      showToast(t('edit.closed'))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMsLeft])
+
+  // ── Vote change window ──────────────────────────────────────
+  async function changeVote(newOptionId: string) {
+    if (!votedOptionId || newOptionId === votedOptionId) return
+    setChanging(true)
+    const prevId = votedOptionId
+    const { error } = await supabase.rpc('change_vote', {
+      p_poll_id: poll.id,
+      p_new_option_id: newOptionId,
+    })
+    setChanging(false)
+    if (error) {
+      if (error.message.includes('change_window_expired')) showToast(t('vote.locked'))
+      return
+    }
+    // Optimistic: move the count from old → new.
+    setPoll((prev) => ({
+      ...prev,
+      options: prev.options.map((o) =>
+        o.id === prevId ? { ...o, vote_count: Math.max(0, o.vote_count - 1) }
+        : o.id === newOptionId ? { ...o, vote_count: o.vote_count + 1 } : o
+      ),
+    }))
+    setVoted(newOptionId)
+  }
+
+  // Lock toast when the change window closes.
+  useEffect(() => {
+    if (votedOptionId && votedAt && changeMsLeft === 0 && changeWasOpenRef.current && !lockedRef.current) {
+      lockedRef.current = true
+      showToast(t('vote.lockedToast'))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeMsLeft, votedOptionId, votedAt])
+
   // Results sorted by vote count descending
   const results = [...poll.options]
     .sort((a, b) => b.vote_count - a.vote_count)
@@ -278,6 +385,55 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
+      {/* Edit window banner */}
+      {editOpen && !editing && (
+        <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3">
+          <span className="text-sm font-semibold">
+            ✏️ {t('edit.banner')} {Math.ceil(editMsLeft / 1000)} {t('edit.seconds')}
+          </span>
+          <button
+            onClick={() => { setEditQuestion(poll.question); setEditOpts(poll.options.map((o) => ({ id: o.id, text: o.text }))); setEditing(true) }}
+            className="flex items-center gap-1.5 bg-amber-500 text-white text-xs font-bold px-3 min-h-[36px] rounded-full hover:bg-amber-600 active:scale-95 transition-all shrink-0"
+          >
+            <Pencil size={13} /> {t('edit.btn')}
+          </button>
+        </div>
+      )}
+
+      {/* Question — editable inline within the 60s window */}
+      {editing ? (
+        <div className="flex flex-col gap-3">
+          <textarea
+            value={editQuestion}
+            onChange={(e) => setEditQuestion(e.target.value.slice(0, 280))}
+            rows={2}
+            className="w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-lg font-bold bg-transparent resize-none outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <div className="flex flex-col gap-2">
+            {editOpts.map((o, i) => (
+              <input
+                key={o.id}
+                value={o.text}
+                onChange={(e) => setEditOpts((prev) => prev.map((x, idx) => idx === i ? { ...x, text: e.target.value.slice(0, 120) } : x))}
+                className="w-full border border-border rounded-xl px-4 py-2.5 text-base bg-transparent outline-none focus:ring-2 focus:ring-amber-400 min-h-[44px]"
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditing(false)} disabled={savingEdit}
+              className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors">
+              {t('edit.cancel')}
+            </button>
+            <button onClick={saveEdit} disabled={savingEdit}
+              className="flex-1 flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60">
+              {savingEdit ? <Loader2 size={16} className="animate-spin" /> : t('edit.save')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <h1 className="text-xl sm:text-2xl font-black text-foreground leading-snug">{poll.question}</h1>
+      )}
+
       {/* Poll meta row */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[poll.category] ?? 'bg-muted text-muted-foreground'}`}>
@@ -295,7 +451,16 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Vote selection OR results */}
       {showResults ? (
-        <ResultsBars results={results} votedOptionId={votedOptionId} total={total} />
+        <ResultsBars
+          results={results}
+          votedOptionId={votedOptionId}
+          total={total}
+          changeOpen={changeOpen}
+          changeSecondsLeft={Math.ceil(changeMsLeft / 1000)}
+          changing={changing}
+          onChange={changeVote}
+          locked={!!votedOptionId && !!votedAt && !changeOpen}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {poll.options
@@ -443,14 +608,38 @@ function ResultsBars({
   results,
   votedOptionId,
   total,
+  changeOpen = false,
+  changeSecondsLeft = 0,
+  changing = false,
+  onChange,
+  locked = false,
 }: {
   results: ResultEntry[]
   votedOptionId: string | null
   total: number
+  changeOpen?: boolean
+  changeSecondsLeft?: number
+  changing?: boolean
+  onChange?: (optionId: string) => void
+  locked?: boolean
 }) {
   const { t } = useLanguage()
   return (
     <div className="flex flex-col gap-4">
+      {/* Change-your-vote window banner */}
+      {changeOpen && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-2.5 text-sm font-semibold">
+          <RefreshCw size={14} className={changing ? 'animate-spin' : ''} />
+          {t('change.banner')} {changeSecondsLeft} {t('change.suffix')}
+        </div>
+      )}
+      {/* Locked badge */}
+      {locked && (
+        <div className="flex items-center gap-2 bg-muted text-muted-foreground rounded-xl px-4 py-2.5 text-sm font-semibold">
+          <Lock size={14} /> {t('vote.locked')}
+        </div>
+      )}
+
       {results.map((opt) => {
         const isVoted = opt.id === votedOptionId
         return (
@@ -472,9 +661,20 @@ function ResultsBars({
                 style={{ width: `${opt.pct}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {opt.vote_count.toLocaleString()} vote{opt.vote_count !== 1 ? 's' : ''}
-            </p>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">
+                {opt.vote_count.toLocaleString()} vote{opt.vote_count !== 1 ? 's' : ''}
+              </p>
+              {changeOpen && !isVoted && onChange && (
+                <button
+                  onClick={() => onChange(opt.id)}
+                  disabled={changing}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {t('change.to')}
+                </button>
+              )}
+            </div>
           </div>
         )
       })}

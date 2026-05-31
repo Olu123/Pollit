@@ -81,12 +81,13 @@ export default function ProfilePage() {
 
     const [{ data: profile }, polls, votes, { data: recentPolls }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),
-      supabase.from('polls').select('id', { count: 'exact', head: true }).eq('created_by', user.id),
+      supabase.from('polls').select('id', { count: 'exact', head: true }).eq('created_by', user.id).is('deleted_at', null),
       supabase.from('votes').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase
         .from('polls')
         .select('id, question, category, total_votes, created_at')
         .eq('created_by', user.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5),
     ])

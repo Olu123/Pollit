@@ -74,7 +74,7 @@ async function getLeaderboardData(): Promise<LeaderboardEntry[]> {
 
   const [{ data: voteRows }, { data: pollRows }] = await Promise.all([
     supabase.from('votes').select('user_id').in('user_id', ids),
-    supabase.from('polls').select('created_by').in('created_by', ids).not('created_by', 'is', null),
+    supabase.from('polls').select('created_by').in('created_by', ids).not('created_by', 'is', null).is('deleted_at', null),
   ])
 
   const votesMap = new Map<string, number>()

@@ -20,6 +20,7 @@ export interface Profile {
   state_of_origin: string | null
   referred_by: string | null
   referral_count: number
+  is_admin: boolean
   created_at: string
   updated_at: string
 }
@@ -44,6 +45,7 @@ export interface Poll {
   community_name: string | null
   community_code: string | null
   community_password: string | null
+  deleted_at: string | null
   created_at: string
   profile: Profile | null
   options: PollOption[]
@@ -56,6 +58,8 @@ export interface Vote {
   user_id: string
   comment: string | null
   state: string | null
+  changed_at: string | null
+  original_option_id: string | null
   created_at: string
 }
 

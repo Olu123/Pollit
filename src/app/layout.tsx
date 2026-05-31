@@ -4,6 +4,7 @@ import './globals.css'
 import Navbar from '@/components/Navbar'
 import { AuthProvider } from '@/components/AuthProvider'
 import { LanguageProvider } from '@/components/LanguageProvider'
+import { ToastProvider } from '@/components/ToastProvider'
 import PwaRegister from '@/components/PwaRegister'
 import PageFade from '@/components/PageFade'
 import ReferralTracker from '@/components/ReferralTracker'
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="h-1 bg-[#DC2626] w-full shrink-0" />
 
         <LanguageProvider>
+          <ToastProvider>
           <AuthProvider>
             <Navbar />
             <PageFade className="flex-1">{children}</PageFade>
@@ -43,6 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PwaRegister />
             <ReferralTracker />
           </AuthProvider>
+          </ToastProvider>
         </LanguageProvider>
       </body>
     </html>

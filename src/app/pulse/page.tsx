@@ -55,6 +55,7 @@ async function getPulse() {
         .from('polls')
         .select('id, question, category, total_votes, created_by, profile:profiles!created_by ( username ), options:poll_options ( id, text, vote_count, display_order )')
         .eq('is_community', false)
+        .is('deleted_at', null)
         .gte('created_at', weekStartIso)
         .order('total_votes', { ascending: false })
         .limit(100),

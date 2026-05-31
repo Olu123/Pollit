@@ -8,6 +8,7 @@ import VotingPanel from '@/components/VotingPanel'
 import StateBreakdown from '@/components/StateBreakdown'
 import FloatingShare from '@/components/FloatingShare'
 import CommunityGate from '@/components/CommunityGate'
+import PollActionsMenu from '@/components/PollActionsMenu'
 import { T } from '@/components/LanguageProvider'
 import { SITE_URL } from '@/lib/site'
 import { shareMessages, whatsappHref } from '@/lib/share'
@@ -22,7 +23,12 @@ const POLL_SELECT = `
 export const revalidate = 60
 
 async function getPoll(id: string): Promise<Poll | null> {
-  const { data, error } = await supabase.from('polls').select(POLL_SELECT).eq('id', id).single()
+  const { data, error } = await supabase
+    .from('polls')
+    .select(POLL_SELECT)
+    .eq('id', id)
+    .is('deleted_at', null)
+    .single()
   if (error || !data) return null
   const poll = data as unknown as Poll
   poll.options = [...poll.options].sort((a, b) => a.display_order - b.display_order)
@@ -87,14 +93,17 @@ export default async function PollPage({
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
       <FloatingShare href={links.whatsapp} />
 
-      {/* Back link */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
-      >
-        <ArrowLeft size={15} />
-        <T k="vote.allPolls" />
-      </Link>
+      {/* Back link + actions */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        >
+          <ArrowLeft size={15} />
+          <T k="vote.allPolls" />
+        </Link>
+        <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} redirectHome />
+      </div>
 
       {/* Poll card */}
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-8 shadow-sm flex flex-col gap-5 sm:gap-6">
@@ -110,11 +119,6 @@ export default async function PollPage({
             </div>
           </div>
         )}
-
-        {/* Question */}
-        <h1 className="text-xl sm:text-2xl font-black text-foreground leading-snug">
-          {poll.question}
-        </h1>
 
         {/* Meta */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">

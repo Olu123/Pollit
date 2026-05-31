@@ -6,6 +6,7 @@ import type { Poll, PollCategory } from '@/lib/types'
 import { useLanguage } from './LanguageProvider'
 import type { StringKey } from '@/lib/i18n'
 import { SITE_DOMAIN as SITE } from '@/lib/site'
+import PollActionsMenu from './PollActionsMenu'
 
 function pollUrl(id: string) {
   return `https://${SITE}/polls/${id}`
@@ -79,9 +80,12 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${CATEGORY_STYLES[poll.category]}`}>
           {t(`cat.${poll.category}` as StringKey)}
         </span>
-        <div className={`flex items-center gap-1 text-xs font-medium shrink-0 ${timeColor(poll.expires_at)}`}>
-          <Clock size={11} strokeWidth={2.5} />
-          <span>{timeRemaining()}</span>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <div className={`flex items-center gap-1 text-xs font-medium ${timeColor(poll.expires_at)}`}>
+            <Clock size={11} strokeWidth={2.5} />
+            <span>{timeRemaining()}</span>
+          </div>
+          <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} />
         </div>
       </div>
 
