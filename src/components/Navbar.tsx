@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Menu, X, BarChart2, LogOut, Star, Plus, User as UserIcon, Settings } from 'lucide-react'
+import { Menu, X, BarChart2, LogOut, Coins, Plus, User as UserIcon, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
@@ -96,7 +96,7 @@ export default function Navbar() {
             <div className="ml-2 flex items-center gap-2">
               {profile && (
                 <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full">
-                  <Star size={11} strokeWidth={2.5} />
+                  <Coins size={11} strokeWidth={2.5} />
                   <span>{profile.points.toLocaleString()} {t('lb.tokens')}</span>
                 </div>
               )}
