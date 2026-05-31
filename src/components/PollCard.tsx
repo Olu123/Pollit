@@ -5,8 +5,7 @@ import { Clock, Users } from 'lucide-react'
 import type { Poll, PollCategory } from '@/lib/types'
 import { useLanguage } from './LanguageProvider'
 import type { StringKey } from '@/lib/i18n'
-
-const SITE = 'agora-ng.vercel.app'
+import { SITE_DOMAIN as SITE } from '@/lib/site'
 
 function pollUrl(id: string) {
   return `https://${SITE}/polls/${id}`

@@ -4,10 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { T } from '@/components/LanguageProvider'
 import type { StringKey } from '@/lib/i18n'
 import type { PollCategory } from '@/lib/types'
+import { SITE_DOMAIN as SITE } from '@/lib/site'
 
 export const revalidate = 3600 // refresh hourly
 
-const SITE = 'agora-ng.vercel.app'
 const CATEGORIES: PollCategory[] = ['Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle']
 const WEEK_MS = 7 * 86_400_000
 
