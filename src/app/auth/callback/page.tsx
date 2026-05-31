@@ -9,11 +9,19 @@ export default function AuthCallbackPage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Exchange PKCE code for session (Supabase appends ?code=... to callback URL)
-    const code = new URLSearchParams(window.location.search).get('code')
+    const params = new URLSearchParams(window.location.search)
+    const code   = params.get('code')
+    const type   = params.get('type')
+
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        router.replace(error ? '/login' : '/')
+        if (error) { router.replace('/login'); return }
+        // Password reset flow — send to the reset form
+        if (type === 'recovery') {
+          router.replace('/auth/reset')
+        } else {
+          router.replace('/')
+        }
       })
     } else {
       router.replace('/')

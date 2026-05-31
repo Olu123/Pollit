@@ -51,6 +51,33 @@ body {
   }
 }
 
+/* ── react-phone-number-input overrides ─────────────────────── */
+.phone-input-wrapper .PhoneInput {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  min-height: 48px;
+  gap: 0.5rem;
+  background: transparent;
+}
+.phone-input-wrapper .PhoneInputInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  padding: 0;
+}
+.phone-input-wrapper .PhoneInputInput::placeholder {
+  color: var(--muted-foreground);
+}
+.phone-input-wrapper .PhoneInputCountrySelectArrow {
+  color: var(--muted-foreground);
+  margin-left: 2px;
+}
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar {
   -ms-overflow-style: none;

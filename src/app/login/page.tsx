@@ -3,38 +3,58 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { BarChart2, Phone, ArrowRight, RotateCcw } from 'lucide-react'
+import {
+  BarChart2, Eye, EyeOff, ArrowRight, RotateCcw,
+  Mail, Phone, Globe,
+} from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
-import { useLanguage } from '@/components/LanguageProvider'
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
+import 'react-phone-number-input/style.css'
 
-type Step = 'choose' | 'phone' | 'otp'
+type Tab       = 'social' | 'email' | 'phone'
+type EmailStep = 'login' | 'signup' | 'forgot' | 'forgot-sent'
+type PhoneStep = 'input' | 'otp'
+
+function pwStrength(pw: string): { label: string; color: string; pct: number } {
+  if (pw.length < 6) return { label: 'Too short', color: 'bg-red-400', pct: 15 }
+  const has = (r: RegExp) => r.test(pw)
+  const score = [pw.length >= 8, has(/[A-Z]/), has(/[0-9]/), has(/[^a-zA-Z0-9]/)]
+    .filter(Boolean).length
+  if (score <= 1) return { label: 'Weak',   color: 'bg-red-400',   pct: 30  }
+  if (score === 2) return { label: 'Fair',   color: 'bg-amber-400', pct: 60  }
+  return               { label: 'Strong', color: 'bg-green-500', pct: 100 }
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
-  const { t } = useLanguage()
 
-  const [step, setStep]   = useState<Step>('choose')
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp]     = useState('')
-  const [busy, setBusy]   = useState(false)
+  const [tab,       setTab]       = useState<Tab>('social')
+  const [emailStep, setEmailStep] = useState<EmailStep>('login')
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>('input')
+
+  const [email,     setEmail]     = useState('')
+  const [password,  setPassword]  = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [showPw,    setShowPw]    = useState(false)
+  const [phone,     setPhone]     = useState<string | undefined>()
+  const [otp,       setOtp]       = useState('')
+
+  const [busy,  setBusy]  = useState(false)
   const [error, setError] = useState('')
+  const [info,  setInfo]  = useState('')
 
-  // Redirect if already logged in
   useEffect(() => {
     if (!loading && user) router.replace('/')
   }, [user, loading, router])
 
-  function normalizePhone(raw: string) {
-    const d = raw.replace(/\D/g, '')
-    if (d.startsWith('234')) return `+${d}`
-    if (d.startsWith('0'))   return `+234${d.slice(1)}`
-    return `+234${d}`
-  }
+  function reset() { setError(''); setInfo('') }
 
+  function switchTab(t: Tab) { setTab(t); reset() }
+
+  // ── Social ─────────────────────────────────────────────────────
   async function handleOAuth(provider: 'google' | 'facebook' | 'twitter') {
-    setBusy(true)
-    setError('')
+    setBusy(true); reset()
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
@@ -42,31 +62,76 @@ export default function LoginPage() {
     if (error) { setError(error.message); setBusy(false) }
   }
 
+  // ── Email ──────────────────────────────────────────────────────
+  async function handleEmailLogin() {
+    setBusy(true); reset()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    router.push('/')
+  }
+
+  async function handleEmailSignup() {
+    if (password.length < 8)       { setError('Password must be at least 8 characters.'); return }
+    if (password !== confirmPw)    { setError('Passwords do not match.'); return }
+    setBusy(true); reset()
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    if (data.session) {
+      // Email confirm is off — user is signed in immediately; send to profile to set username
+      router.push('/profile')
+    } else {
+      setInfo('Check your email to confirm your account, then sign in.')
+      setEmailStep('login')
+    }
+  }
+
+  async function handleForgot() {
+    setBusy(true); reset()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+    })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    setEmailStep('forgot-sent')
+  }
+
+  // ── Phone OTP ──────────────────────────────────────────────────
   async function handleSendOtp() {
-    setBusy(true)
-    setError('')
-    const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone) })
-    if (error) { setError(error.message); setBusy(false) }
-    else { setStep('otp'); setBusy(false) }
+    if (!phone || !isValidPhoneNumber(phone)) {
+      setError('Please enter a valid phone number.'); return
+    }
+    setBusy(true); reset()
+    const { error } = await supabase.auth.signInWithOtp({ phone })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    setPhoneStep('otp')
   }
 
   async function handleVerifyOtp() {
-    setBusy(true)
-    setError('')
+    if (!phone) return
+    setBusy(true); reset()
     const { error } = await supabase.auth.verifyOtp({
-      phone: normalizePhone(phone),
-      token: otp.trim(),
-      type: 'sms',
+      phone, token: otp.trim(), type: 'sms',
     })
-    if (error) { setError(error.message); setBusy(false) }
-    else router.push('/')
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    router.push('/')
   }
 
   if (loading) return null
 
+  const strength = password ? pwStrength(password) : null
+
   return (
     <main className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
+
         {/* Logo */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-[#DC2626] to-[#b91c1c] rounded-3xl flex items-center justify-center shadow-xl shadow-[#DC2626]/20">
@@ -74,144 +139,339 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-black">
-              {t('login.welcomePrefix')} <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
+              Welcome to{' '}
+              <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t('login.subtitle')}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
           </div>
         </div>
 
+        {/* Tab bar */}
+        <div className="flex bg-muted rounded-xl p-1 mb-4 gap-1">
+          {(
+            [
+              ['social', <Globe key="g" size={13} />,  'Social'],
+              ['email',  <Mail  key="m" size={13} />,  'Email'],
+              ['phone',  <Phone key="p" size={13} />,  'Phone'],
+            ] as const
+          ).map(([t, icon, label]) => (
+            <button
+              key={t}
+              onClick={() => switchTab(t)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                tab === t
+                  ? 'bg-card shadow text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+
         <div className="bg-gradient-to-b from-card to-muted/40 border border-border rounded-2xl p-6 shadow-md flex flex-col gap-4">
-          {step === 'choose' && (
+
+          {/* ── Social tab ─────────────────────────────────────── */}
+          {tab === 'social' && (
             <>
               <button
                 onClick={() => handleOAuth('google')}
                 disabled={busy}
                 className="w-full flex items-center justify-center gap-3 border border-border rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.99] transition-all disabled:opacity-60"
               >
-                <GoogleIcon />
-                {t('login.google')}
+                <GoogleIcon /> Continue with Google
               </button>
-
               <button
                 onClick={() => handleOAuth('facebook')}
                 disabled={busy}
                 className="w-full flex items-center justify-center gap-3 bg-[#1877F2] text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-[#1466d4] active:scale-[0.99] transition-all disabled:opacity-60"
               >
-                <FacebookIcon />
-                {t('login.facebook')}
+                <FacebookIcon /> Continue with Facebook
               </button>
-
               <button
                 onClick={() => handleOAuth('twitter')}
                 disabled={busy}
                 className="w-full flex items-center justify-center gap-3 bg-black text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-zinc-800 active:scale-[0.99] transition-all disabled:opacity-60"
               >
-                <XIcon />
-                {t('login.x')}
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">{t('login.or')}</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              <button
-                onClick={() => setStep('phone')}
-                className="w-full flex items-center justify-center gap-3 bg-muted rounded-xl px-4 min-h-[52px] text-sm font-semibold text-foreground hover:bg-border active:scale-[0.99] transition-all"
-              >
-                <Phone size={16} strokeWidth={2} />
-                {t('login.phone')}
+                <XIcon /> Continue with X
               </button>
             </>
           )}
 
-          {step === 'phone' && (
+          {/* ── Email tab ──────────────────────────────────────── */}
+          {tab === 'email' && (
             <>
-              <button
-                onClick={() => { setStep('choose'); setError('') }}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 px-1 min-h-[44px] w-fit"
-              >
-                {t('login.back')}
-              </button>
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  {t('login.phoneLabel')}
-                </label>
-                <div className="flex items-center gap-2 border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
-                  <span className="pl-3 text-base text-muted-foreground font-medium shrink-0">🇳🇬 +234</span>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="8012345678"
-                    className="flex-1 py-3.5 pr-3 text-base bg-transparent outline-none placeholder:text-muted-foreground"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
-                  />
+              {/* Sign in */}
+              {emailStep === 'login' && (
+                <>
+                  <Field label="Email">
+                    <input
+                      type="email" value={email} autoComplete="email"
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                    />
+                  </Field>
+                  <Field label="Password">
+                    <div className="relative">
+                      <input
+                        type={showPw ? 'text' : 'password'} value={password} autoComplete="current-password"
+                        onChange={(e) => setPassword(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleEmailLogin()}
+                        placeholder="••••••••"
+                        className="w-full border border-border rounded-xl px-4 py-3 pr-11 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                      />
+                      <button
+                        type="button" onClick={() => setShowPw(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </Field>
+                  <button
+                    onClick={handleEmailLogin}
+                    disabled={busy || !email || !password}
+                    className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
+                  >
+                    {busy ? 'Signing in…' : 'Sign In'}
+                    {!busy && <ArrowRight size={15} />}
+                  </button>
+                  <div className="flex items-center justify-between text-xs">
+                    <button
+                      onClick={() => { setEmailStep('forgot'); reset() }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                    <button
+                      onClick={() => { setEmailStep('signup'); reset() }}
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      Sign Up
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Sign up */}
+              {emailStep === 'signup' && (
+                <>
+                  <Field label="Email">
+                    <input
+                      type="email" value={email} autoComplete="email"
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                    />
+                  </Field>
+                  <Field label="Password">
+                    <div className="relative">
+                      <input
+                        type={showPw ? 'text' : 'password'} value={password} autoComplete="new-password"
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Min 8 characters"
+                        className="w-full border border-border rounded-xl px-4 py-3 pr-11 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                      />
+                      <button
+                        type="button" onClick={() => setShowPw(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {strength && password && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${strength.color}`}
+                            style={{ width: `${strength.pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium ${
+                          strength.pct === 100 ? 'text-green-600'
+                          : strength.pct >= 60  ? 'text-amber-600'
+                          : 'text-red-500'
+                        }`}>
+                          {strength.label}
+                        </span>
+                      </div>
+                    )}
+                  </Field>
+                  <Field label="Confirm Password">
+                    <input
+                      type={showPw ? 'text' : 'password'} value={confirmPw} autoComplete="new-password"
+                      onChange={(e) => setConfirmPw(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEmailSignup()}
+                      placeholder="Re-enter password"
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                    />
+                  </Field>
+                  <button
+                    onClick={handleEmailSignup}
+                    disabled={busy || !email || !password || !confirmPw}
+                    className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
+                  >
+                    {busy ? 'Creating account…' : 'Create Account'}
+                    {!busy && <ArrowRight size={15} />}
+                  </button>
+                  <button
+                    onClick={() => { setEmailStep('login'); reset() }}
+                    className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Already have an account?{' '}
+                    <span className="text-primary font-semibold">Sign In</span>
+                  </button>
+                </>
+              )}
+
+              {/* Forgot password */}
+              {emailStep === 'forgot' && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Enter your email and we'll send you a reset link.
+                  </p>
+                  <Field label="Email">
+                    <input
+                      type="email" value={email} autoComplete="email"
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleForgot()}
+                      placeholder="you@example.com"
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                    />
+                  </Field>
+                  <button
+                    onClick={handleForgot}
+                    disabled={busy || !email}
+                    className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
+                  >
+                    {busy ? 'Sending…' : 'Send Reset Link'}
+                    {!busy && <ArrowRight size={15} />}
+                  </button>
+                  <button
+                    onClick={() => { setEmailStep('login'); reset() }}
+                    className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← Back to Sign In
+                  </button>
+                </>
+              )}
+
+              {/* Forgot password — sent */}
+              {emailStep === 'forgot-sent' && (
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
+                  <div className="text-4xl">📬</div>
+                  <p className="font-bold text-foreground">Check your email</p>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a reset link to <strong>{email}</strong>
+                  </p>
+                  <button
+                    onClick={() => { setEmailStep('login'); reset() }}
+                    className="text-sm text-primary font-semibold hover:underline mt-2"
+                  >
+                    ← Back to Sign In
+                  </button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Enter your number with or without the leading 0.
-                </p>
-              </div>
-              <button
-                onClick={handleSendOtp}
-                disabled={busy || phone.replace(/\D/g, '').length < 7}
-                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
-              >
-                {busy ? t('login.sending') : t('login.sendOtp')}
-                {!busy && <ArrowRight size={15} />}
-              </button>
+              )}
             </>
           )}
 
-          {step === 'otp' && (
+          {/* ── Phone tab ──────────────────────────────────────── */}
+          {tab === 'phone' && (
             <>
-              <div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  We sent a 6-digit code to <strong>{normalizePhone(phone)}</strong>
-                </p>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  {t('login.otpLabel')}
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456"
-                  className="w-full border border-border rounded-xl px-4 py-3.5 text-xl font-bold text-center tracking-[0.4em] bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground placeholder:tracking-normal"
-                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyOtp()}
-                />
-              </div>
-              <button
-                onClick={handleVerifyOtp}
-                disabled={busy || otp.length < 6}
-                className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
-              >
-                {busy ? t('login.verifying') : t('login.verifyOtp')}
-                {!busy && <ArrowRight size={15} />}
-              </button>
-              <button
-                onClick={() => { setStep('phone'); setOtp(''); setError('') }}
-                className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
-              >
-                <RotateCcw size={12} /> {t('login.resend')}
-              </button>
+              {phoneStep === 'input' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Phone number
+                    </label>
+                    <div className="phone-input-wrapper border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
+                      <PhoneInput
+                        international
+                        defaultCountry="NG"
+                        value={phone}
+                        onChange={setPhone}
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Select your country then enter your number.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSendOtp}
+                    disabled={busy || !phone || !isValidPhoneNumber(phone ?? '')}
+                    className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
+                  >
+                    {busy ? 'Sending…' : 'Send OTP'}
+                    {!busy && <ArrowRight size={15} />}
+                  </button>
+                </>
+              )}
+
+              {phoneStep === 'otp' && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a 6-digit code to <strong>{phone}</strong>
+                  </p>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Enter OTP
+                    </label>
+                    <input
+                      type="text" inputMode="numeric" value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onKeyDown={(e) => e.key === 'Enter' && handleVerifyOtp()}
+                      placeholder="123456"
+                      className="w-full border border-border rounded-xl px-4 py-3.5 text-xl font-bold text-center tracking-[0.4em] bg-transparent outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground placeholder:tracking-normal"
+                    />
+                  </div>
+                  <button
+                    onClick={handleVerifyOtp}
+                    disabled={busy || otp.length < 6}
+                    className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold min-h-[52px] rounded-xl hover:bg-primary-dark active:scale-[0.99] transition-all disabled:opacity-60"
+                  >
+                    {busy ? 'Verifying…' : 'Verify OTP'}
+                    {!busy && <ArrowRight size={15} />}
+                  </button>
+                  <button
+                    onClick={() => { setPhoneStep('input'); setOtp(''); reset() }}
+                    className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
+                  >
+                    <RotateCcw size={12} /> Resend / change number
+                  </button>
+                </>
+              )}
             </>
           )}
 
+          {/* Error / info banners */}
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
+          {info && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              {info}
+            </p>
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          {t('login.terms')}
+          By continuing you agree to Pollit's Terms of Service.
         </p>
       </div>
     </main>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-semibold text-foreground">{label}</label>
+      {children}
+    </div>
   )
 }
 
