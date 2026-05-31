@@ -9,6 +9,7 @@ import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
 import { useToast } from './ToastProvider'
+import ReportButton from './ReportButton'
 import { enqueueVote } from '@/lib/voteQueue'
 import { NIGERIAN_STATES } from '@/lib/states'
 import { getInsight } from '@/lib/insights'
@@ -719,6 +720,7 @@ function CommentsFeed({ comments }: { comments: PollComment[] }) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground truncate">{handle}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{timeAgo(c.created_at)}</span>
+                  <span className="ml-auto shrink-0"><ReportButton commentId={c.id} size={12} /></span>
                 </div>
                 <p className="text-sm text-foreground/80 leading-snug break-words mt-0.5">
                   {c.comment}

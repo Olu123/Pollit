@@ -126,6 +126,23 @@ create policy "options_insert" on public.poll_options for insert with check (
 create policy "votes_read"   on public.votes for select using (true);
 create policy "votes_insert" on public.votes for insert with check (auth.uid() = user_id);
 
+-- ── Reports ───────────────────────────────────────────────────
+
+create table if not exists public.reports (
+  id          uuid default gen_random_uuid() primary key,
+  reporter_id uuid references public.profiles(id),
+  poll_id     uuid references public.polls(id),
+  comment_id  uuid references public.votes(id),
+  reason      text not null,
+  created_at  timestamptz default now()
+);
+
+alter table public.reports enable row level security;
+create policy "reports_insert" on public.reports for insert with check (auth.uid() = reporter_id);
+create policy "reports_read_admin" on public.reports for select using (
+  exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+);
+
 -- ── RPC: cast_vote ────────────────────────────────────────────
 -- Atomically inserts a vote (with optional comment), increments
 -- counts, awards 10 tokens.

@@ -8,6 +8,8 @@ import { ToastProvider } from '@/components/ToastProvider'
 import PwaRegister from '@/components/PwaRegister'
 import PageFade from '@/components/PageFade'
 import ReferralTracker from '@/components/ReferralTracker'
+import { OnboardingProvider } from '@/components/OnboardingProvider'
+import SiteFooter from '@/components/SiteFooter'
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'], display: 'swap' })
 
@@ -37,13 +39,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LanguageProvider>
           <ToastProvider>
           <AuthProvider>
-            <Navbar />
-            <PageFade className="flex-1">{children}</PageFade>
-            <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} Pollit
-            </footer>
-            <PwaRegister />
-            <ReferralTracker />
+            <OnboardingProvider>
+              <Navbar />
+              <PageFade className="flex-1">{children}</PageFade>
+              <SiteFooter />
+              <PwaRegister />
+              <ReferralTracker />
+            </OnboardingProvider>
           </AuthProvider>
           </ToastProvider>
         </LanguageProvider>

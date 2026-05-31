@@ -7,6 +7,7 @@ import { useLanguage } from './LanguageProvider'
 import type { StringKey } from '@/lib/i18n'
 import { SITE_DOMAIN as SITE } from '@/lib/site'
 import PollActionsMenu from './PollActionsMenu'
+import ReportButton from './ReportButton'
 
 function pollUrl(id: string) {
   return `https://${SITE}/polls/${id}`
@@ -85,6 +86,7 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
             <Clock size={11} strokeWidth={2.5} />
             <span>{timeRemaining()}</span>
           </div>
+          <ReportButton pollId={poll.id} />
           <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} />
         </div>
       </div>
