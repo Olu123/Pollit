@@ -138,7 +138,7 @@ export default function Navbar() {
         <div className="md:hidden flex items-center gap-1.5">
           {profile && (
             <div className="flex items-center gap-1 bg-primary-light text-primary text-xs font-semibold px-2.5 py-1.5 rounded-full leading-none">
-              <Star size={10} strokeWidth={2.5} />
+              <Coins size={10} strokeWidth={2.5} />
               <span>
                 {profile.points >= 1000
                   ? `${(profile.points / 1000).toFixed(1)}k`

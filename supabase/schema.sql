@@ -447,3 +447,209 @@ create trigger on_auth_user_created
 alter publication supabase_realtime add table public.poll_options;
 alter publication supabase_realtime add table public.polls;
 alter publication supabase_realtime add table public.votes;
+
+-- ══════════════════════════════════════════════════════════════
+-- Admin Dashboard — additions
+-- ══════════════════════════════════════════════════════════════
+
+-- ── Column additions ──────────────────────────────────────────
+alter table public.profiles add column if not exists is_suspended boolean default false;
+alter table public.polls    add column if not exists is_pinned    boolean default false;
+alter table public.reports  add column if not exists status       text default 'open';
+
+-- ── Announcements ─────────────────────────────────────────────
+create table if not exists public.announcements (
+  id         uuid default gen_random_uuid() primary key,
+  message    text not null,
+  is_active  boolean default true,
+  created_by uuid references public.profiles(id),
+  expires_at timestamptz,
+  created_at timestamptz default now()
+);
+alter table public.announcements enable row level security;
+create policy "announcements_read"         on public.announcements for select using (true);
+create policy "announcements_admin_insert" on public.announcements for insert with check (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+create policy "announcements_admin_update" on public.announcements for update using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+create policy "announcements_admin_delete" on public.announcements for delete using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
+-- ── Token transactions ────────────────────────────────────────
+create table if not exists public.token_transactions (
+  id         uuid default gen_random_uuid() primary key,
+  user_id    uuid references public.profiles(id),
+  amount     integer not null,
+  reason     text not null,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now()
+);
+alter table public.token_transactions enable row level security;
+create policy "token_tx_own_read"  on public.token_transactions for select using (auth.uid() = user_id);
+create policy "token_tx_admin_all" on public.token_transactions for all using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
+-- ── Suspensions ───────────────────────────────────────────────
+create table if not exists public.suspensions (
+  id           uuid default gen_random_uuid() primary key,
+  user_id      uuid references public.profiles(id),
+  reason       text not null,
+  suspended_by uuid references public.profiles(id),
+  suspended_at timestamptz default now(),
+  lifted_at    timestamptz
+);
+alter table public.suspensions enable row level security;
+create policy "suspensions_admin_all" on public.suspensions for all using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
+-- ── RPC: admin_get_users ──────────────────────────────────────
+create or replace function public.admin_get_users()
+returns table(
+  id           uuid,
+  username     text,
+  email        text,
+  points       integer,
+  is_admin     boolean,
+  is_suspended boolean,
+  created_at   timestamptz,
+  poll_count   bigint,
+  vote_count   bigint
+)
+language sql security definer set search_path = public
+as $$
+  select
+    p.id,
+    p.username,
+    coalesce(u.email, '') as email,
+    p.points,
+    coalesce(p.is_admin, false),
+    coalesce(p.is_suspended, false),
+    p.created_at,
+    (select count(*) from polls where created_by = p.id and deleted_at is null)::bigint,
+    (select count(*) from votes where user_id = p.id)::bigint
+  from public.profiles p
+  left join auth.users u on u.id = p.id
+  order by p.created_at desc;
+$$;
+grant execute on function public.admin_get_users() to authenticated;
+
+-- ── RPC: admin_suspend_user ───────────────────────────────────
+create or replace function public.admin_suspend_user(p_user_id uuid, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set is_suspended = true where id = p_user_id;
+  insert into suspensions (user_id, reason, suspended_by) values (p_user_id, p_reason, v_uid);
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_suspend_user(uuid, text) to authenticated;
+
+-- ── RPC: admin_unsuspend_user ─────────────────────────────────
+create or replace function public.admin_unsuspend_user(p_user_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set is_suspended = false where id = p_user_id;
+  update suspensions set lifted_at = now() where user_id = p_user_id and lifted_at is null;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_unsuspend_user(uuid) to authenticated;
+
+-- ── RPC: admin_toggle_admin ───────────────────────────────────
+create or replace function public.admin_toggle_admin(p_user_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  if p_user_id = v_uid then raise exception 'cannot_modify_self'; end if;
+  update profiles set is_admin = not coalesce(is_admin, false)
+  where id = p_user_id returning is_admin into v_new;
+  return jsonb_build_object('success', true, 'is_admin', v_new);
+end; $$;
+grant execute on function public.admin_toggle_admin(uuid) to authenticated;
+
+-- ── RPC: admin_adjust_tokens ──────────────────────────────────
+create or replace function public.admin_adjust_tokens(p_user_id uuid, p_amount integer, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set points = points + p_amount, updated_at = now() where id = p_user_id;
+  insert into token_transactions (user_id, amount, reason, created_by)
+  values (p_user_id, p_amount, p_reason, v_uid);
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_adjust_tokens(uuid, integer, text) to authenticated;
+
+-- ── RPC: admin_delete_poll (no vote limit) ────────────────────
+create or replace function public.admin_delete_poll(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set deleted_at = now() where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_delete_poll(uuid) to authenticated;
+
+-- ── RPC: admin_restore_poll ───────────────────────────────────
+create or replace function public.admin_restore_poll(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set deleted_at = null where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_restore_poll(uuid) to authenticated;
+
+-- ── RPC: admin_toggle_pin ─────────────────────────────────────
+create or replace function public.admin_toggle_pin(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_pinned = not coalesce(is_pinned, false)
+  where id = p_poll_id returning is_pinned into v_new;
+  return jsonb_build_object('success', true, 'is_pinned', v_new);
+end; $$;
+grant execute on function public.admin_toggle_pin(uuid) to authenticated;
+
+-- ── RPC: admin_toggle_hot_take ────────────────────────────────
+create or replace function public.admin_toggle_hot_take(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_hot_take = not coalesce(is_hot_take, false)
+  where id = p_poll_id returning is_hot_take into v_new;
+  return jsonb_build_object('success', true, 'is_hot_take', v_new);
+end; $$;
+grant execute on function public.admin_toggle_hot_take(uuid) to authenticated;
+
+-- ── RPC: admin_dismiss_report ─────────────────────────────────
+create or replace function public.admin_dismiss_report(p_report_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update reports set status = 'dismissed' where id = p_report_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_dismiss_report(uuid) to authenticated;
