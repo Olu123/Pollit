@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
+import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
 
 const HOT_TAKE_MIN_TOKENS = 100
 
@@ -87,15 +88,14 @@ export default function CreatePollPage() {
     e.preventDefault()
     setError('')
 
-    const trimmed = options.map((o) => o.trim()).filter(Boolean)
-    if (!question.trim())   return setError('Please enter a question.')
+    const trimmed = options.map((o) => sanitizePollOption(o)).filter(Boolean)    if (!question.trim())   return setError('Please enter a question.')
     if (trimmed.length < 2) return setError('Please fill in at least 2 options.')
 
     setBusy(true)
     const expiresAt = new Date(Date.now() + expiryDays * 86_400_000).toISOString()
 
     const { data: pollId, error: rpcError } = await supabase.rpc('create_poll', {
-      p_question:    question.trim(),
+      p_question: cleanQuestion,
       p_category:    category,
       p_options:     trimmed,
       p_expires_at:  expiresAt,
@@ -106,8 +106,15 @@ export default function CreatePollPage() {
       p_community_password: isCommunity ? communityPassword.trim() || null : null,
     })
 
-    if (rpcError) { setError(rpcError.message); setBusy(false); return }
-    // Community polls open straight to their gated link with the code.
+    if (rpcError) {
+      setError(
+        rpcError.message.includes('daily_poll_limit_reached')
+          ? "You've reached your daily limit of 10 polls. Come back tomorrow!"
+          : rpcError.message
+      )
+      setBusy(false)
+      return
+    }    // Community polls open straight to their gated link with the code.
     if (isCommunity && communityCode) {
       router.push(`/polls/${pollId}?code=${communityCode}`)
     } else {

@@ -11,6 +11,7 @@ import {
   Loader2, Save, Star, BarChart2, CheckSquare, Lock, Mail, CheckCircle2, Pencil, X,
 } from 'lucide-react'
 import type { PollCategory } from '@/lib/types'
+import { sanitizeUsername, sanitizeText } from '@/lib/sanitize'
 
 const AGE_RANGES = ['Under 18', '18-24', '25-34', '35-44', '45-54', '55+']
 const SEX_OPTIONS = ['Male', 'Female', 'Prefer not to say']
@@ -118,7 +119,8 @@ export default function ProfilePage() {
     setError('')
     setSaved(false)
 
-    if (!username.trim()) {
+    const cleanUsername = sanitizeUsername(username)
+if (!cleanUsername) {
       setError('Username is required.')
       return
     }
@@ -127,14 +129,14 @@ export default function ProfilePage() {
     const { error: updErr } = await supabase
       .from('profiles')
       .update({
-        username:    username.trim(),
-        full_name:   fullName.trim() || null,
+        username:    cleanUsername,
+        full_name:   sanitizeText(fullName) || null
         age_range:   ageRange || null,
         sex:         sex || null,
         birth_month: birthMonth ? Number(birthMonth) : null,
         birth_day:   birthDay ? Number(birthDay) : null,
         phone:       phone.trim() || null,
-        bio:         bio.trim() || null,
+        bio:         sanitizeText(bio).slice(0, 160) || null,
         updated_at:  new Date().toISOString(),
       })
       .eq('id', user!.id)

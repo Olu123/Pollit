@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle2, Send } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
+import { sanitizeText } from '@/lib/sanitize'
 
 const SUBJECTS = [
   'General Enquiry', 'Report a Problem', 'Partnership / Advertising',
@@ -44,8 +45,8 @@ export default function ContactPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(), email: email.trim(), subject,
-          message: message.trim(), username, userId: user?.id ?? null,
+          name: sanitizeText(name), email: email.trim(), subject,
+          message: sanitizeText(message), username, userId: user?.id ?? null,
         }),
       })
       const data = await res.json()

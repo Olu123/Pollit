@@ -14,6 +14,7 @@ import { enqueueVote } from '@/lib/voteQueue'
 import { NIGERIAN_STATES } from '@/lib/states'
 import { getInsight } from '@/lib/insights'
 import { shareMessages, whatsappHref } from '@/lib/share'
+import { sanitizeComment } from '@/lib/sanitize'
 
 function timeRemaining(expiresAt: string) {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -243,7 +244,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   async function submitVote() {
     if (!user || !selectedId) return
     const optionId = selectedId
-    const text = comment.trim() || null
+    const text = sanitizeComment(comment) || null
     const stateVal = voteState || null
     setVoting(true)
     setVoteError('')
@@ -272,6 +273,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       setVoteError(
         error.message.includes('already_voted')
           ? t('vote.already')
+          : error.message.includes('hourly_vote_limit_reached')
+          ? "You're voting too fast! Please slow down."
           : error.message
       )
       setVoting(false)
