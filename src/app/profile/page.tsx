@@ -130,7 +130,7 @@ if (!cleanUsername) {
       .from('profiles')
       .update({
         username:    cleanUsername,
-        full_name:   sanitizeText(fullName) || null
+        full_name:   sanitizeText(fullName) || null,
         age_range:   ageRange || null,
         sex:         sex || null,
         birth_month: birthMonth ? Number(birthMonth) : null,
