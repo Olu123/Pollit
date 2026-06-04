@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/components/AuthProvider'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
+import { Turnstile } from '@marsidev/react-turnstile'
 
 type Tab       = 'social' | 'email' | 'phone'
 type EmailStep = 'login' | 'signup' | 'forgot' | 'forgot-sent'
@@ -43,6 +44,7 @@ export default function LoginPage() {
   const [busy,  setBusy]  = useState(false)
   const [error, setError] = useState('')
   const [info,  setInfo]  = useState('')
+  const [captchaToken, setCaptchaToken] = useState('')
 
   useEffect(() => {
     if (!loading && user) router.replace('/')
@@ -83,7 +85,6 @@ export default function LoginPage() {
     setBusy(false)
     if (error) { setError(error.message); return }
     if (data.session) {
-      // Email confirm is off — user is signed in immediately; send to profile to set username
       router.push('/profile')
     } else {
       setInfo('Check your email to confirm your account, then sign in.')
@@ -105,6 +106,21 @@ export default function LoginPage() {
   async function handleSendOtp() {
     if (!phone || !isValidPhoneNumber(phone)) {
       setError('Please enter a valid phone number.'); return
+    }
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+    if (siteKey) {
+      if (!captchaToken) { setError('Please complete the security check.'); return }
+      const captchaRes = await fetch('/api/verify-captcha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken }),
+      })
+      const captchaData = await captchaRes.json()
+      if (!captchaData.success) {
+        setError('Security check failed. Please try again.')
+        setCaptchaToken('')
+        return
+      }
     }
     setBusy(true); reset()
     const { error } = await supabase.auth.signInWithOtp({ phone })
@@ -201,7 +217,6 @@ export default function LoginPage() {
           {/* ── Email tab ──────────────────────────────────────── */}
           {tab === 'email' && (
             <>
-              {/* Sign in */}
               {emailStep === 'login' && (
                 <>
                   <Field label="Email">
@@ -254,7 +269,6 @@ export default function LoginPage() {
                 </>
               )}
 
-              {/* Sign up */}
               {emailStep === 'signup' && (
                 <>
                   <Field label="Email">
@@ -325,7 +339,6 @@ export default function LoginPage() {
                 </>
               )}
 
-              {/* Forgot password */}
               {emailStep === 'forgot' && (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -357,7 +370,6 @@ export default function LoginPage() {
                 </>
               )}
 
-              {/* Forgot password — sent */}
               {emailStep === 'forgot-sent' && (
                 <div className="flex flex-col items-center gap-3 py-4 text-center">
                   <div className="text-4xl">📬</div>
@@ -398,6 +410,14 @@ export default function LoginPage() {
                       Select your country then enter your number.
                     </p>
                   </div>
+                  {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+                    <Turnstile
+                      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                      onSuccess={(token) => setCaptchaToken(token)}
+                      onExpire={() => setCaptchaToken('')}
+                      options={{ theme: 'auto' }}
+                    />
+                  )}
                   <button
                     onClick={handleSendOtp}
                     disabled={busy || !phone || !isValidPhoneNumber(phone ?? '')}

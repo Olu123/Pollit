@@ -9,6 +9,7 @@ import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
+import { Turnstile } from '@marsidev/react-turnstile'
 
 const HOT_TAKE_MIN_TOKENS = 100
 
@@ -57,6 +58,7 @@ export default function CreatePollPage() {
   const [communityPassword, setCommunityPassword] = useState('')
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
+  const [captchaToken, setCaptchaToken] = useState('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
 
@@ -88,14 +90,33 @@ export default function CreatePollPage() {
     e.preventDefault()
     setError('')
 
-    const trimmed = options.map((o) => sanitizePollOption(o)).filter(Boolean)    if (!question.trim())   return setError('Please enter a question.')
-    if (trimmed.length < 2) return setError('Please fill in at least 2 options.')
+    const trimmed = options.map((o) => sanitizePollOption(o)).filter(Boolean)
+    const cleanQuestion = sanitizePollQuestion(question)
+    if (!cleanQuestion)      return setError('Please enter a question.')
+    if (cleanQuestion.length < 10) return setError('Question must be at least 10 characters.')
+    if (trimmed.length < 2)  return setError('Please fill in at least 2 options.')
+
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+    if (siteKey) {
+      if (!captchaToken) { setError('Please complete the security check.'); return }
+      const captchaRes = await fetch('/api/verify-captcha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken }),
+      })
+      const captchaData = await captchaRes.json()
+      if (!captchaData.success) {
+        setError('Security check failed. Please try again.')
+        setCaptchaToken('')
+        return
+      }
+    }
 
     setBusy(true)
     const expiresAt = new Date(Date.now() + expiryDays * 86_400_000).toISOString()
 
     const { data: pollId, error: rpcError } = await supabase.rpc('create_poll', {
-      p_question: cleanQuestion,
+      p_question:    cleanQuestion,
       p_category:    category,
       p_options:     trimmed,
       p_expires_at:  expiresAt,
@@ -114,7 +135,7 @@ export default function CreatePollPage() {
       )
       setBusy(false)
       return
-    }    // Community polls open straight to their gated link with the code.
+    }
     if (isCommunity && communityCode) {
       router.push(`/polls/${pollId}?code=${communityCode}`)
     } else {
@@ -136,7 +157,6 @@ export default function CreatePollPage() {
         </p>
       </div>
 
-      {/* Step indicator */}
       <StepIndicator current={step} />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
@@ -156,7 +176,7 @@ export default function CreatePollPage() {
           <p className="text-xs text-muted-foreground mt-1 text-right">{question.length}/280</p>
         </div>
 
-        {/* Category — horizontally scrollable on mobile, wraps on desktop */}
+        {/* Category */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">{t('create.category')}</label>
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
@@ -177,7 +197,7 @@ export default function CreatePollPage() {
           </div>
         </div>
 
-        {/* Hot Take toggle — only for users with 100+ tokens */}
+        {/* Hot Take toggle */}
         {canHotTake && (
           <button
             type="button"
@@ -337,13 +357,21 @@ export default function CreatePollPage() {
           <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} isHotTake={canHotTake && isHotTake} />
         </div>
 
+        {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+          <Turnstile
+            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+            onSuccess={(token) => setCaptchaToken(token)}
+            onExpire={() => setCaptchaToken('')}
+            options={{ theme: 'auto' }}
+          />
+        )}
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
             {error}
           </p>
         )}
 
-        {/* Sticky at viewport bottom on mobile, inline on desktop */}
         <div className="sticky bottom-4 sm:static z-10">
           <button
             type="submit"
