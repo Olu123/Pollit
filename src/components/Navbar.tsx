@@ -65,8 +65,11 @@ export default function Navbar() {
             <BarChart2 size={16} className="text-white" strokeWidth={2.5} />
           </div>
           <span className="text-xl font-black tracking-tight">
-            <span className="text-foreground">WéPoll</span>
-            <span className="text-[#DC2626]">it</span>
+            <span className="text-foreground font-black">We</span>
+            <span className="text-muted-foreground font-black">+</span>
+            <span className="text-foreground font-black">Poll</span>
+            <span className="text-muted-foreground font-black">+</span>
+            <span className="text-[#DC2626] font-black">it</span>
           </span>
         </Link>
 

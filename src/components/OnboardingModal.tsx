@@ -33,7 +33,7 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
               <BarChart2 size={16} className="text-white" strokeWidth={2.5} />
             </div>
             <span className="text-lg font-black tracking-tight">
-              <span className="text-foreground">WéPoll</span><span className="text-[#DC2626]">it</span>
+              <span className="text-foreground font-black">We</span><span className="text-muted-foreground font-black">+</span><span className="text-foreground font-black">Poll</span><span className="text-muted-foreground font-black">+</span><span className="text-[#DC2626] font-black">it</span>
             </span>
           </div>
           <button onClick={onClose} aria-label="Skip" className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-1">
@@ -46,7 +46,7 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
           {slide === 0 && (
             <div className="flex flex-col items-center text-center gap-4">
               <div className="w-20 h-20 rounded-2xl bg-primary-light flex items-center justify-center text-4xl">🗳️</div>
-              <h2 className="text-2xl font-black text-foreground">{en ? 'Welcome to WéPollit' : 'Welcome Enter WéPollit'}</h2>
+              <h2 className="text-2xl font-black text-foreground">{en ? 'Welcome to WePollit' : 'Welcome Enter WePollit'}</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {en
                   ? "Nigeria's home for honest public opinion. Your voice matters here — from politics and sports to entertainment and everyday life."
@@ -71,8 +71,8 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
                 <span className="shrink-0">⏳</span>
                 <span>
                   {en
-                    ? 'Note: Poll creation unlocks 1 hour after sign-up — this helps keep WéPollit genuine.'
-                    : 'Note: You fit make poll 1 hour after you sign up — e dey help us keep WéPollit real.'}
+                    ? 'Note: Poll creation unlocks 1 hour after sign-up — this helps keep WePollit genuine.'
+                    : 'Note: You fit make poll 1 hour after you sign up — e dey help us keep WePollit real.'}
                 </span>
               </div>
             </div>

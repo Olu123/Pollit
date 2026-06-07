@@ -66,7 +66,7 @@ function SidebarContent({ pathname, onClose, flagCount }: { pathname: string; on
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <ArrowLeft size={15} />
-          Back to WéPollit
+          Back to WePollit
         </Link>
       </div>
     </div>

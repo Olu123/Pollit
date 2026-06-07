@@ -99,10 +99,10 @@ export async function POST(request: Request) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
       const sendResult = await resend.emails.send({
-        from: 'WéPollit <onboarding@resend.dev>',
+        from: 'WePollit <onboarding@resend.dev>',
         to: NOTIFY_TO,
         replyTo: email,
-        subject: `[WéPollit Contact] ${subject} — from ${name}`,
+        subject: `[WePollit Contact] ${subject} — from ${name}`,
         html: emailHtml({
           name, email, username: username ?? '', subject, message,
           date: new Date().toUTCString(),

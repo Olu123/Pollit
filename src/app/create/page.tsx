@@ -487,7 +487,7 @@ function NewAccountGate({ createdAt }: { createdAt: string }) {
         <h1 className="text-xl sm:text-2xl font-black text-foreground">Almost ready to create polls!</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Your account needs to be at least 1 hour old before you can create polls.
-          This helps us keep WéPollit genuine and free from spam.
+          This helps us keep WePollit genuine and free from spam.
         </p>
 
         <div className="w-full bg-muted/60 rounded-xl px-4 py-3 flex flex-col gap-2 text-sm">

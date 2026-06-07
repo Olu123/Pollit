@@ -5,7 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    '[WéPollit] Supabase env vars missing. ' +
+    '[WePollit] Supabase env vars missing. ' +
     'Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your Vercel project settings.'
   )
 }

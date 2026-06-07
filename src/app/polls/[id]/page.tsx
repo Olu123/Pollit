@@ -40,12 +40,12 @@ async function getPoll(id: string): Promise<Poll | null> {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const poll = await getPoll(id)
-  if (!poll || poll.is_community) return { title: 'WéPollit' }
+  if (!poll || poll.is_community) return { title: 'WePollit' }
   return {
-    title: `${poll.question} — WéPollit`,
+    title: `${poll.question} — WePollit`,
     openGraph: {
       title: poll.question,
-      description: 'Vote now on WéPollit 🗳️',
+      description: 'Vote now on WePollit 🗳️',
       url: `${SITE_URL}/polls/${id}`,
       images: [{ url: `/api/og/poll/${id}`, width: 1200, height: 630 }],
     },

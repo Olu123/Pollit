@@ -8,7 +8,7 @@ export default function SentryTestButton() {
   return (
     <button
       onClick={() => {
-        throw new Error('Sentry test error from WéPollit')
+        throw new Error('Sentry test error from WePollit')
       }}
       className="hidden"
     >

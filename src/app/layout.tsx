@@ -16,10 +16,10 @@ import AnnouncementBanner from '@/components/AnnouncementBanner'
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'], display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'WéPollit — Have your say. Pave the way. Save the day.',
+  title: 'WePollit — Have your say. Pave the way. Save the day.',
   description: "Nigeria's people-powered opinion platform",
-  keywords: ['Nigeria', 'polling', 'vote', 'opinion', 'WéPollit'],
-  appleWebApp: { capable: true, title: 'WéPollit', statusBarStyle: 'default' },
+  keywords: ['Nigeria', 'polling', 'vote', 'opinion', 'WePollit'],
+  appleWebApp: { capable: true, title: 'WePollit', statusBarStyle: 'default' },
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',

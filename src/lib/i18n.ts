@@ -123,7 +123,7 @@ export const STRINGS = {
   'create.step3':        { en: 'Settings', pid: 'Settings' },
 
   // ── Login ───────────────────────────────────────────────────
-  'login.welcome':   { en: 'Welcome to WéPollit', pid: 'Welcome Enter WéPollit' },
+  'login.welcome':   { en: 'Welcome to WePollit', pid: 'Welcome Enter WePollit' },
   'login.welcomePrefix': { en: 'Welcome to', pid: 'Welcome Enter' },
   'login.resend':    { en: 'Resend / change number', pid: 'Send again / change number' },
   'login.subtitle':  { en: 'Sign in to vote and create polls', pid: 'Come talk your own — vote and make poll' },
@@ -139,7 +139,7 @@ export const STRINGS = {
   'login.phoneLabel': { en: 'Phone number', pid: 'Your phone number' },
   'login.otpLabel':  { en: 'Enter OTP', pid: 'Enter the Code' },
   'login.back':      { en: '← Back', pid: '← Go back' },
-  'login.terms':     { en: "By continuing you agree to WéPollit's Terms of Service.", pid: 'If you continue, you don gree to WéPollit Terms of Service.' },
+  'login.terms':     { en: "By continuing you agree to WePollit's Terms of Service.", pid: 'If you continue, you don gree to WePollit Terms of Service.' },
 
   // ── Leaderboard ─────────────────────────────────────────────
   'lb.title':        { en: 'Leaderboard', pid: 'Top Ranking' },
@@ -158,7 +158,7 @@ export const STRINGS = {
   'lb.browse':       { en: 'Browse Polls', pid: 'See Polls' },
 
   // ── Profile ─────────────────────────────────────────────────
-  'profile.manage':   { en: 'Manage your WéPollit account', pid: 'Manage your WéPollit account' },
+  'profile.manage':   { en: 'Manage your WePollit account', pid: 'Manage your WePollit account' },
   'profile.details':  { en: 'Profile details', pid: 'My Info' },
   'profile.edit':     { en: 'Edit', pid: 'Change My Info' },
   'profile.cancel':   { en: 'Cancel', pid: 'Leave am' },
@@ -239,7 +239,7 @@ export const STRINGS = {
   'error.dailyPollLimit':  { en: "You've hit the daily poll limit (10/day). Try again tomorrow.", pid: 'You don reach the poll limit for today (10/day). Try again tomorrow.' },
 
   // ── PWA install ─────────────────────────────────────────────
-  'pwa.install':     { en: 'Install WéPollit', pid: 'Install WéPollit' },
+  'pwa.install':     { en: 'Install WePollit', pid: 'Install WePollit' },
   'pwa.installSub':  { en: 'Add to your home screen for quick access.', pid: 'Add am to your home screen make e easy.' },
   'pwa.installBtn':  { en: 'Install', pid: 'Install' },
 } satisfies Record<string, Entry>
