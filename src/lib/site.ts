@@ -5,7 +5,7 @@ export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   'https://wepollit.com'
 
-export const SITE_NAME = 'Pollit'
+export const SITE_NAME = 'WéPollit'
 
 // Host without protocol (e.g. "wepollit.com") for compact display
 // and share-message links that omit the scheme.

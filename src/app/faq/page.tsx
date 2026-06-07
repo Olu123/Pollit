@@ -6,7 +6,7 @@ import { Search, ChevronDown, ThumbsUp, ThumbsDown, MessageCircle, HelpCircle } 
 import ViewTracker from '@/components/ViewTracker'
 
 type Category =
-  | 'About Pollit'
+  | 'About WéPollit'
   | 'Voting & Polls'
   | 'Tokens'
   | 'Challenges'
@@ -21,7 +21,7 @@ interface QA {
 }
 
 const CATEGORIES: Category[] = [
-  'About Pollit',
+  'About WéPollit',
   'Voting & Polls',
   'Tokens',
   'Challenges',
@@ -31,26 +31,26 @@ const CATEGORIES: Category[] = [
 ]
 
 const FAQS: QA[] = [
-  // ── About Pollit ──
+  // ── About WéPollit ──
   {
-    category: 'About Pollit',
-    q: 'What is Pollit?',
-    a: 'Pollit is Nigeria’s home for honest public opinion. Create polls, vote on topics that matter — from politics and sports to entertainment, business and everyday life — and see how the country really feels, broken down by state.',
+    category: 'About WéPollit',
+    q: 'What is WéPollit?',
+    a: 'WéPollit is Nigeria’s home for honest public opinion. Create polls, vote on topics that matter — from politics and sports to entertainment, business and everyday life — and see how the country really feels, broken down by state.',
   },
   {
-    category: 'About Pollit',
-    q: 'Is Pollit free to use?',
+    category: 'About WéPollit',
+    q: 'Is WéPollit free to use?',
     a: 'Yes. Creating an account, voting, and making polls are all completely free. You even earn tokens for taking part.',
   },
   {
-    category: 'About Pollit',
+    category: 'About WéPollit',
     q: 'Do I need an account to vote?',
     a: 'You need a free account to vote, comment, create polls and earn tokens. This keeps results genuine and limits one vote per person per poll.',
   },
   {
-    category: 'About Pollit',
-    q: 'What languages does Pollit support?',
-    a: 'Pollit works in both English and Nigerian Pidgin. Use the language toggle in the navigation bar to switch at any time.',
+    category: 'About WéPollit',
+    q: 'What languages does WéPollit support?',
+    a: 'WéPollit works in both English and Nigerian Pidgin. Use the language toggle in the navigation bar to switch at any time.',
   },
 
   // ── Voting & Polls ──
@@ -77,7 +77,7 @@ const FAQS: QA[] = [
   {
     category: 'Voting & Polls',
     q: 'Why can’t I create a poll yet?',
-    a: 'Your account must be at least 1 hour old before you can create polls. This short wait helps keep Pollit genuine and free from spam. In the meantime, explore polls and vote to earn tokens.',
+    a: 'Your account must be at least 1 hour old before you can create polls. This short wait helps keep WéPollit genuine and free from spam. In the meantime, explore polls and vote to earn tokens.',
   },
   {
     category: 'Voting & Polls',
@@ -104,7 +104,7 @@ const FAQS: QA[] = [
   {
     category: 'Tokens',
     q: 'What are tokens?',
-    a: 'Tokens are Pollit’s reward points. You earn them for taking part — voting, creating polls, joining challenges and inviting friends. They power the leaderboard and unlock features like Hot Takes.',
+    a: 'Tokens are WéPollit’s reward points. You earn them for taking part — voting, creating polls, joining challenges and inviting friends. They power the leaderboard and unlock features like Hot Takes.',
   },
   {
     category: 'Tokens',
@@ -146,7 +146,7 @@ const FAQS: QA[] = [
   {
     category: 'Challenges',
     q: 'Can I create my own Challenge?',
-    a: 'Challenges are created by the Pollit team to keep prize pools fair and funded. Keep an eye on the Challenges tab for new ones to join.',
+    a: 'Challenges are created by the WéPollit team to keep prize pools fair and funded. Keep an eye on the Challenges tab for new ones to join.',
   },
 
   // ── Account & Privacy ──
@@ -158,11 +158,11 @@ const FAQS: QA[] = [
   {
     category: 'Account & Privacy',
     q: 'Can I have more than one account?',
-    a: 'No. Pollit is one account per person. Multiple or fake accounts undermine honest results and may lead to suspension of all the accounts involved.',
+    a: 'No. WéPollit is one account per person. Multiple or fake accounts undermine honest results and may lead to suspension of all the accounts involved.',
   },
   {
     category: 'Account & Privacy',
-    q: 'What personal information does Pollit collect?',
+    q: 'What personal information does WéPollit collect?',
     a: 'We collect only what we need to run your account and keep results genuine — such as your sign-in details and optional profile information you choose to add. See our Privacy Policy for the full details.',
   },
   {
@@ -184,8 +184,8 @@ const FAQS: QA[] = [
   },
   {
     category: 'Safety & Community',
-    q: 'How does Pollit prevent fake votes and bots?',
-    a: 'Pollit runs an automated behavioural-flagging system that watches for rapid voting, new-account vote bursts, poll-creation bursts and coordinated voting. Suspicious activity is flagged for review and can lead to suspension.',
+    q: 'How does WéPollit prevent fake votes and bots?',
+    a: 'WéPollit runs an automated behavioural-flagging system that watches for rapid voting, new-account vote bursts, poll-creation bursts and coordinated voting. Suspicious activity is flagged for review and can lead to suspension.',
   },
   {
     category: 'Safety & Community',
@@ -250,7 +250,7 @@ export default function FaqPage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">Frequently Asked Questions</h1>
         <p className="text-sm text-muted-foreground max-w-md">
-          Everything you need to know about voting, polls, tokens, challenges and staying safe on Pollit.
+          Everything you need to know about voting, polls, tokens, challenges and staying safe on WéPollit.
         </p>
       </div>
 

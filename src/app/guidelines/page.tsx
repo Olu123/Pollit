@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Community Guidelines — Pollit',
-  description: 'How we keep Pollit honest, safe and valuable for all Nigerians.',
+  title: 'Community Guidelines — WéPollit',
+  description: 'How we keep WéPollit honest, safe and valuable for all Nigerians.',
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -33,20 +33,20 @@ export default function GuidelinesPage() {
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
       {/* Header */}
       <header className="flex flex-col gap-1.5">
-        <h1 className="text-2xl sm:text-3xl font-black text-foreground">Pollit Community Guidelines</h1>
-        <p className="text-sm text-muted-foreground">How we keep Pollit honest, safe and valuable for all Nigerians.</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-foreground">WéPollit Community Guidelines</h1>
+        <p className="text-sm text-muted-foreground">How we keep WéPollit honest, safe and valuable for all Nigerians.</p>
         <p className="text-xs text-muted-foreground">Last updated: June 2026</p>
       </header>
 
       <Section title="Our Mission">
         <p>
-          Pollit exists to give every Nigerian a credible, neutral platform to share their honest opinions.
+          WéPollit exists to give every Nigerian a credible, neutral platform to share their honest opinions.
           We believe in the power of the people — when individual voices come together, they create an
           authoritative picture of what Nigeria truly thinks.
         </p>
       </Section>
 
-      <Section title="Who Can Use Pollit">
+      <Section title="Who Can Use WéPollit">
         <List mark="•" items={[
           'Anyone with a valid phone number or social media account',
           'You must be at least 13 years old',
@@ -100,12 +100,12 @@ export default function GuidelinesPage() {
           'Tokens appear on the leaderboard',
           'Token values and utility will grow as the platform grows',
           'Tokens are non-transferable between accounts',
-          'Pollit reserves the right to adjust token rewards at any time',
+          'WéPollit reserves the right to adjust token rewards at any time',
         ]} />
       </Section>
 
       <Section title="Enforcement">
-        <p>Pollit reserves the right to:</p>
+        <p>WéPollit reserves the right to:</p>
         <List mark="•" items={[
           'Remove any poll or comment that violates these guidelines',
           'Suspend or permanently ban accounts for repeated violations',
@@ -122,7 +122,7 @@ export default function GuidelinesPage() {
       </Section>
 
       <p className="text-xs text-muted-foreground border-t border-border pt-4">
-        These guidelines are effective from June 2026. Pollit is committed to being a credibly neutral
+        These guidelines are effective from June 2026. WéPollit is committed to being a credibly neutral
         platform for all Nigerians.
       </p>
     </main>

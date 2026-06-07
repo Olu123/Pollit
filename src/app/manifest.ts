@@ -3,8 +3,8 @@ import type { MetadataRoute } from 'next'
 // Served at /manifest.webmanifest and auto-linked into <head> by Next.js.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Pollit',
-    short_name: 'Pollit',
+    name: 'WéPollit',
+    short_name: 'WéPollit',
     description: 'Nigeria: Have your say. Pave the way. Save the day.',
     start_url: '/',
     display: 'standalone',

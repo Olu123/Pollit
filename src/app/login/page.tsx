@@ -160,7 +160,7 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-2xl font-black">
               Welcome to{' '}
-              <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
+              <span className="text-foreground">WéPoll</span><span className="text-[#DC2626]">it</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
           </div>
@@ -483,7 +483,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          By continuing you agree to Pollit's Terms of Service.
+          By continuing you agree to WéPollit's Terms of Service.
         </p>
       </div>
     </main>

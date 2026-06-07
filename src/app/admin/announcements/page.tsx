@@ -97,7 +97,7 @@ export default function AdminAnnouncementsPage() {
             onChange={e => setMessage(e.target.value)}
             rows={3}
             maxLength={280}
-            placeholder="e.g. Pollit is running a token giveaway this week — vote on any poll to enter!"
+            placeholder="e.g. WéPollit is running a token giveaway this week — vote on any poll to enter!"
             className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary resize-none"
           />
           <p className="text-xs text-muted-foreground text-right mt-0.5">{message.length}/280</p>

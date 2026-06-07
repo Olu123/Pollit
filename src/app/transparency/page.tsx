@@ -428,8 +428,8 @@ export default function TransparencyPage() {
         <h2 className="text-lg font-black text-foreground flex items-center gap-2"><Lock size={18} className="text-primary" /> {en ? 'Reserve Integrity' : 'Reserve Integrity'}</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           {en
-            ? 'Pollit started with 100,000,000 tokens. Every token distributed is logged in this public ledger. The reserve is simply:'
-            : 'Pollit start with 100,000,000 tokens. Every token wey dem share dey logged for this public ledger. The reserve na just:'}
+            ? 'WéPollit started with 100,000,000 tokens. Every token distributed is logged in this public ledger. The reserve is simply:'
+            : 'WéPollit start with 100,000,000 tokens. Every token wey dem share dey logged for this public ledger. The reserve na just:'}
         </p>
         <div className="bg-card border border-border rounded-xl p-4 font-mono text-sm flex flex-col gap-1.5">
           <div className="flex items-center justify-between"><span className="text-muted-foreground">{en ? 'Total Supply' : 'Total Supply'}</span><span className="font-bold text-foreground tabular-nums">{fmt(TOTAL_SUPPLY)}</span></div>
@@ -487,8 +487,8 @@ export default function TransparencyPage() {
       {/* ── Footer note ────────────────────────────────────────── */}
       <p className="text-xs text-muted-foreground text-center max-w-2xl mx-auto leading-relaxed">
         {en
-          ? 'This data updates every 60 seconds. Pollit is committed to full transparency in its token economy. All transactions are permanent and cannot be deleted or modified.'
-          : 'This data dey update every 60 seconds. Pollit promise say everything go dey open for everybody to see.'}
+          ? 'This data updates every 60 seconds. WéPollit is committed to full transparency in its token economy. All transactions are permanent and cannot be deleted or modified.'
+          : 'This data dey update every 60 seconds. WéPollit promise say everything go dey open for everybody to see.'}
       </p>
     </main>
   )

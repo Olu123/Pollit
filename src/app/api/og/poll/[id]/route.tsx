@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .single()
 
   const poll = data as unknown as Poll | null
-  const question = poll?.question ?? 'Vote on Pollit'
+  const question = poll?.question ?? 'Vote on WéPollit'
   const opts = (poll?.options ?? []).slice().sort((a, b) => b.vote_count - a.vote_count)
   const total = opts.reduce((s, o) => s + o.vote_count, 0)
   const top = opts.slice(0, 2).map((o) => ({
@@ -49,8 +49,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             </div>
           </div>
           <div style={{ display: 'flex', fontSize: 40, fontWeight: 900 }}>
-            <span style={{ color: '#171717' }}>Poll</span>
-            <span style={{ color: '#DC2626' }}>+it</span>
+            <span style={{ color: '#171717' }}>WéPoll</span>
+            <span style={{ color: '#DC2626' }}>it</span>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         {/* footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 28 }}>
           <span style={{ color: '#71717a' }}>{total.toLocaleString()} votes</span>
-          <span style={{ color: '#16a34a', fontWeight: 800 }}>Vote now on Pollit 🗳️</span>
+          <span style={{ color: '#16a34a', fontWeight: 800 }}>Vote now on WéPollit 🗳️</span>
         </div>
       </div>
     ),
