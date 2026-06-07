@@ -231,6 +231,8 @@ export const STRINGS = {
   'challenge.poolLabel':   { en: 'Token pool', pid: 'Token pool' },
   'challenge.poolHint':    { en: 'Total tokens to share among all participants.', pid: 'Total tokens to share among everybody wey join.' },
   'home.challenges':       { en: '🏆 Active Challenges', pid: '🏆 Active Challenges' },
+  'home.transparency':     { en: '🔍 Full token transparency — every transaction is public', pid: '🔍 Full token transparency — every transaction dey open for everybody' },
+  'home.transparencyView': { en: 'View ledger', pid: 'See ledger' },
 
   // ── Rate-limit errors ───────────────────────────────────────
   'error.hourlyVoteLimit': { en: "You've hit the hourly vote limit (100/hour). Try again later.", pid: 'You don reach the vote limit for this hour (100/hour). Try again later.' },

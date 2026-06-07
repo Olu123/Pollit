@@ -128,6 +128,20 @@ export default async function HomePage({
         </Link>
       </section>
 
+      {/* Token transparency trust badge */}
+      <Link
+        href="/transparency"
+        className="group flex items-center justify-between gap-3 rounded-xl bg-muted/60 hover:bg-muted px-4 py-2.5 transition-colors -mt-2"
+      >
+        <span className="text-xs sm:text-sm text-muted-foreground">
+          <T k="home.transparency" />
+        </span>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary shrink-0">
+          <T k="home.transparencyView" />
+          <span className="transition-transform group-hover:translate-x-0.5">→</span>
+        </span>
+      </Link>
+
       {/* Live stats bar */}
       <div className="grid grid-cols-3 rounded-xl border border-border bg-card shadow-sm divide-x divide-border">
         <Stat icon={<BarChart2 size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.pollCount)} label={<T k="home.statPolls" />} />

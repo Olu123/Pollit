@@ -663,6 +663,7 @@ alter table public.polls add column if not exists is_challenge          boolean 
 alter table public.polls add column if not exists challenge_pool        integer not null default 0;
 alter table public.polls add column if not exists challenge_status      text    not null default 'active';
 alter table public.polls add column if not exists challenge_distributed boolean not null default false;
+alter table public.polls add column if not exists challenge_distributed_at timestamptz;
 create index if not exists polls_is_challenge_idx on public.polls(is_challenge);
 
 -- ── Challenge participants ────────────────────────────────────
@@ -872,7 +873,8 @@ begin
   select count(*) into v_count from challenge_participants where poll_id = p_poll_id;
   if v_count = 0 then
     update polls
-       set challenge_distributed = true, challenge_status = 'completed'
+       set challenge_distributed = true, challenge_status = 'completed',
+           challenge_distributed_at = now()
      where id = p_poll_id;
     return jsonb_build_object('success', true, 'participants', 0, 'each', 0);
   end if;
@@ -904,3 +906,404 @@ grant execute on function public.distribute_challenge_tokens(uuid) to authentica
 
 -- ── Realtime ──────────────────────────────────────────────────
 alter publication supabase_realtime add table public.challenge_participants;
+
+-- ══════════════════════════════════════════════════════════════
+-- Token Transparency — immutable public ledger
+-- ══════════════════════════════════════════════════════════════
+
+-- ── Extend token_transactions into a full ledger ──────────────
+alter table public.token_transactions add column if not exists username    text;
+alter table public.token_transactions add column if not exists reason_type text;
+alter table public.token_transactions add column if not exists poll_id     uuid references public.polls(id) on delete set null;
+
+-- Preserve ledger rows when a referenced user is deleted (denormalized
+-- username keeps them readable). Rebuild the FKs with on delete set null.
+alter table public.token_transactions drop constraint if exists token_transactions_user_id_fkey;
+alter table public.token_transactions
+  add constraint token_transactions_user_id_fkey
+  foreign key (user_id) references public.profiles(id) on delete set null;
+alter table public.token_transactions drop constraint if exists token_transactions_created_by_fkey;
+alter table public.token_transactions
+  add constraint token_transactions_created_by_fkey
+  foreign key (created_by) references public.profiles(id) on delete set null;
+
+-- Backfill reason_type / username for any pre-existing rows.
+update public.token_transactions set reason_type = case
+  when reason ilike 'challenge%' then 'challenge'
+  when reason ilike 'vote%'      then 'vote'
+  when reason ilike '%poll%'     then 'poll_created'
+  when reason ilike 'referral%'  then 'referral'
+  else 'admin_adjustment'
+end
+where reason_type is null;
+
+update public.token_transactions tt
+   set username = p.username
+  from public.profiles p
+ where p.id = tt.user_id and tt.username is null;
+
+alter table public.token_transactions alter column reason_type set default 'admin_adjustment';
+alter table public.token_transactions alter column reason_type set not null;
+
+create index if not exists tt_created_at_idx  on public.token_transactions(created_at desc);
+create index if not exists tt_reason_type_idx on public.token_transactions(reason_type);
+create index if not exists tt_username_idx     on public.token_transactions(username);
+
+-- ── RLS: public read, authenticated insert, never delete ──────
+-- Drop the older private policies so transparency rules apply cleanly.
+drop policy if exists "token_tx_own_read"        on public.token_transactions;
+drop policy if exists "token_tx_admin_all"       on public.token_transactions;
+drop policy if exists "transactions_public_read" on public.token_transactions;
+drop policy if exists "transactions_no_delete"   on public.token_transactions;
+drop policy if exists "transactions_insert"      on public.token_transactions;
+
+-- Anyone can READ transactions (full transparency).
+create policy "transactions_public_read"
+  on public.token_transactions for select using (true);
+
+-- NO ONE can delete transactions (immutability).
+create policy "transactions_no_delete"
+  on public.token_transactions for delete using (false);
+
+-- Only authenticated users can insert (real writes go through SECURITY
+-- DEFINER RPCs below, which run as the table owner regardless).
+create policy "transactions_insert"
+  on public.token_transactions for insert
+  with check (auth.role() = 'authenticated');
+
+-- ── Daily summary table (chart source; computed on the fly for now) ──
+create table if not exists public.daily_token_summaries (
+  id                 uuid default gen_random_uuid() primary key,
+  date               date not null unique,
+  tokens_distributed integer not null default 0,
+  transaction_count  integer not null default 0,
+  new_users          integer not null default 0,
+  created_at         timestamptz default now()
+);
+alter table public.daily_token_summaries enable row level security;
+create policy "daily_summaries_public_read"
+  on public.daily_token_summaries for select using (true);
+
+-- ══════════════════════════════════════════════════════════════
+-- Award RPCs — final versions that also write to the ledger
+-- (later create-or-replace definitions win over the ones above)
+-- ══════════════════════════════════════════════════════════════
+
+-- ── cast_vote (v3 — ledger) ───────────────────────────────────
+create or replace function public.cast_vote(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 10, 'Vote reward', 'vote', p_poll_id
+  from profiles p where p.id = v_uid;
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+
+-- ── create_poll (v3 — ledger) ─────────────────────────────────
+create or replace function public.create_poll(
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null,
+  p_is_challenge   boolean default false,
+  p_challenge_pool integer default 0
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_poll_id uuid;
+  v_idx     int;
+  v_is_challenge boolean := coalesce(p_is_challenge, false);
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
+
+  if (select count(*) from polls
+        where created_by = v_uid and created_at > now() - interval '1 day') >= 10 then
+    raise exception 'daily_poll_limit_reached';
+  end if;
+
+  if v_is_challenge and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password,
+                     is_challenge, challenge_pool, challenge_status)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          nullif(btrim(p_community_password), ''),
+          v_is_challenge,
+          case when v_is_challenge then greatest(coalesce(p_challenge_pool, 0), 0) else 0 end,
+          'active')
+  returning id into v_poll_id;
+
+  for v_idx in 1 .. array_length(p_options, 1) loop
+    insert into poll_options (poll_id, text, display_order)
+    values (v_poll_id, p_options[v_idx], v_idx);
+  end loop;
+
+  update profiles set points = points + 30, updated_at = now() where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 30, 'Poll creation reward', 'poll_created', v_poll_id
+  from profiles p where p.id = v_uid;
+
+  return v_poll_id;
+end;
+$$;
+
+-- ── join_challenge (v2 — ledger) ──────────────────────────────
+create or replace function public.join_challenge(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+  v_poll    polls%rowtype;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if not v_poll.is_challenge then raise exception 'not_a_challenge'; end if;
+  if coalesce(v_poll.challenge_status, 'active') <> 'active' then
+    raise exception 'challenge_not_active';
+  end if;
+  if v_poll.expires_at <= now() then raise exception 'challenge_not_active'; end if;
+
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  insert into challenge_participants (poll_id, user_id, option_id)
+  values (p_poll_id, v_uid, p_option_id);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 10, 'Challenge join reward', 'challenge', p_poll_id
+  from profiles p where p.id = v_uid;
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+grant execute on function public.join_challenge(uuid, uuid, text, text) to authenticated;
+
+-- ── claim_referral (v2 — ledger) ──────────────────────────────
+create or replace function public.claim_referral(p_referrer_username text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_ref uuid;
+begin
+  if v_uid is null then return jsonb_build_object('ok', false); end if;
+
+  if exists (select 1 from profiles where id = v_uid and referred_by is not null) then
+    return jsonb_build_object('ok', false, 'reason', 'already_referred');
+  end if;
+
+  select id into v_ref from profiles where username = p_referrer_username;
+  if v_ref is null or v_ref = v_uid then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_referrer');
+  end if;
+
+  update profiles set referred_by = v_ref where id = v_uid;
+  update profiles
+     set referral_count = coalesce(referral_count, 0) + 1,
+         points = points + 100,
+         updated_at = now()
+   where id = v_ref;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, created_by)
+  select v_ref, p.username, 100, 'Referral reward', 'referral', v_uid
+  from profiles p where p.id = v_ref;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- ── admin_adjust_tokens (v2 — ledger reason_type) ─────────────
+create or replace function public.admin_adjust_tokens(p_user_id uuid, p_amount integer, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set points = points + p_amount, updated_at = now() where id = p_user_id;
+  insert into token_transactions (user_id, username, amount, reason, reason_type, created_by)
+  select p_user_id, p.username, p_amount, p_reason, 'admin_adjustment', v_uid
+  from profiles p where p.id = p_user_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_adjust_tokens(uuid, integer, text) to authenticated;
+
+-- ── distribute_challenge_tokens (v2 — per-participant ledger) ─
+create or replace function public.distribute_challenge_tokens(p_poll_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_poll   polls%rowtype;
+  v_count  integer;
+  v_each   integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if not v_poll.is_challenge then raise exception 'not_a_challenge'; end if;
+  if v_poll.challenge_distributed then raise exception 'already_distributed'; end if;
+
+  select count(*) into v_count from challenge_participants where poll_id = p_poll_id;
+  if v_count = 0 then
+    update polls
+       set challenge_distributed = true, challenge_status = 'completed',
+           challenge_distributed_at = now()
+     where id = p_poll_id;
+    return jsonb_build_object('success', true, 'participants', 0, 'each', 0);
+  end if;
+
+  v_each := floor(coalesce(v_poll.challenge_pool, 0) / v_count);
+
+  if v_each > 0 then
+    update challenge_participants set reward = v_each where poll_id = p_poll_id;
+
+    update profiles p
+       set points = points + v_each, updated_at = now()
+      from challenge_participants cp
+     where cp.poll_id = p_poll_id and cp.user_id = p.id;
+
+    insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id, created_by)
+    select
+      cp.user_id,
+      p.username,
+      v_each,
+      'Challenge payout: ' || v_poll.question,
+      'challenge',
+      p_poll_id,
+      v_uid
+    from challenge_participants cp
+    join profiles p on p.id = cp.user_id
+    where cp.poll_id = p_poll_id;
+  end if;
+
+  update polls
+     set challenge_distributed = true, challenge_status = 'completed',
+         challenge_distributed_at = now()
+   where id = p_poll_id;
+
+  return jsonb_build_object('success', true, 'participants', v_count, 'each', v_each);
+end;
+$$;
+grant execute on function public.distribute_challenge_tokens(uuid) to authenticated;
+
+-- ══════════════════════════════════════════════════════════════
+-- Transparency read RPCs (public — anon + authenticated)
+-- ══════════════════════════════════════════════════════════════
+
+-- Total distributed (sum of positive amounts) and circulating (net sum).
+create or replace function public.transparency_supply()
+returns table(distributed bigint, circulating bigint)
+language sql stable security definer set search_path = public as $$
+  select
+    coalesce(sum(amount) filter (where amount > 0), 0)::bigint as distributed,
+    coalesce(sum(amount), 0)::bigint                           as circulating
+  from token_transactions;
+$$;
+grant execute on function public.transparency_supply() to anon, authenticated;
+
+-- Distribution breakdown by reason_type (positive amounts only).
+create or replace function public.transparency_by_type()
+returns table(reason_type text, total bigint, tx_count bigint)
+language sql stable security definer set search_path = public as $$
+  select reason_type,
+         coalesce(sum(amount) filter (where amount > 0), 0)::bigint as total,
+         count(*)::bigint                                           as tx_count
+  from token_transactions
+  group by reason_type
+  order by total desc;
+$$;
+grant execute on function public.transparency_by_type() to anon, authenticated;
+
+-- Daily distributed totals over the last p_days days (chart source).
+create or replace function public.transparency_daily(p_days int default 30)
+returns table(date date, tokens_distributed bigint, transaction_count bigint)
+language sql stable security definer set search_path = public as $$
+  select date_trunc('day', created_at)::date                       as date,
+         coalesce(sum(amount) filter (where amount > 0), 0)::bigint as tokens_distributed,
+         count(*)::bigint                                           as transaction_count
+  from token_transactions
+  where created_at > now() - make_interval(days => greatest(p_days, 1))
+  group by 1
+  order by 1;
+$$;
+grant execute on function public.transparency_daily(int) to anon, authenticated;
