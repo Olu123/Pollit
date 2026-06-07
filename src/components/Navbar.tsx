@@ -7,6 +7,7 @@ import { Menu, X, BarChart2, LogOut, Coins, Plus, User as UserIcon, Settings } f
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
+import { getAccountAgeDays } from '@/lib/accountAge'
 import LanguageToggle from './LanguageToggle'
 import type { StringKey } from '@/lib/i18n'
 
@@ -25,6 +26,10 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const { user, profile } = useAuth()
   const { t } = useLanguage()
+
+  // New accounts (<24h, non-admin) can't create polls yet. Keep the button
+  // visible but grayed; clicking lands on /create which explains why.
+  const gatedCreate = !!profile && !profile.is_admin && getAccountAgeDays(profile.created_at) < 1
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4)
@@ -86,7 +91,12 @@ export default function Navbar() {
           })}
           <Link
             href="/create"
-            className="ml-3 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-full hover:bg-primary-dark active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            title={gatedCreate ? 'Available after 24 hours' : undefined}
+            className={`ml-3 text-sm font-semibold px-5 py-2 rounded-full active:scale-95 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+              gatedCreate
+                ? 'bg-primary/40 text-white/90 cursor-help'
+                : 'bg-primary text-white hover:bg-primary-dark'
+            }`}
           >
             {t('nav.create')}
           </Link>
@@ -151,7 +161,10 @@ export default function Navbar() {
             href="/create"
             onClick={() => setOpen(false)}
             aria-label={t('nav.create')}
-            className="flex items-center justify-center w-11 h-11 rounded-full bg-primary text-white hover:bg-primary-dark active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            title={gatedCreate ? 'Available after 24 hours' : undefined}
+            className={`flex items-center justify-center w-11 h-11 rounded-full text-white active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+              gatedCreate ? 'bg-primary/40' : 'bg-primary hover:bg-primary-dark'
+            }`}
           >
             <Plus size={19} strokeWidth={2.5} />
           </Link>

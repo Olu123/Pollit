@@ -67,6 +67,14 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
               <Step icon={<Flame size={18} />} title={en ? 'Share' : 'Share'} body={en
                 ? 'Share results on WhatsApp, climb the leaderboard, and earn tokens for every vote and poll you create.'
                 : 'Share result for WhatsApp, climb ranking, earn tokens.'} />
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2.5 text-xs font-medium">
+                <span className="shrink-0">⏳</span>
+                <span>
+                  {en
+                    ? 'Note: Poll creation is available after your first 24 hours — this helps keep Pollit genuine.'
+                    : 'Note: You fit make poll after 24 hours — e dey help us keep Pollit real.'}
+                </span>
+              </div>
             </div>
           )}
 

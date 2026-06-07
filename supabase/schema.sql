@@ -1307,3 +1307,498 @@ language sql stable security definer set search_path = public as $$
   order by 1;
 $$;
 grant execute on function public.transparency_daily(int) to anon, authenticated;
+
+-- ══════════════════════════════════════════════════════════════
+-- Account age restrictions + behavioural flagging (anti-abuse)
+-- Final create-or-replace definitions of cast_vote / create_poll /
+-- join_challenge live here and win over the ledger versions above.
+-- ══════════════════════════════════════════════════════════════
+
+-- ── New profile + poll columns ────────────────────────────────
+alter table public.profiles
+  add column if not exists first_vote_at timestamptz,
+  add column if not exists first_poll_at timestamptz,
+  add column if not exists flag_count    integer default 0,
+  add column if not exists last_flag_at  timestamptz,
+  add column if not exists admin_notes   text;
+
+alter table public.polls
+  add column if not exists is_flagged boolean default false;
+create index if not exists polls_is_flagged_idx on public.polls(is_flagged) where is_flagged;
+
+-- ── Device / session tracking (hashed IP for privacy) ─────────
+create table if not exists public.device_sessions (
+  id         uuid default gen_random_uuid() primary key,
+  user_id    uuid references public.profiles(id) on delete cascade,
+  ip_hash    text,
+  user_agent text,
+  created_at timestamptz default now()
+);
+create index if not exists ds_user_id_idx on public.device_sessions(user_id);
+create index if not exists ds_ip_hash_idx on public.device_sessions(ip_hash);
+
+alter table public.device_sessions enable row level security;
+
+drop policy if exists "device_sessions_insert"      on public.device_sessions;
+drop policy if exists "admins_read_device_sessions" on public.device_sessions;
+
+create policy "device_sessions_insert"
+  on public.device_sessions for insert
+  with check (auth.uid() = user_id);
+
+create policy "admins_read_device_sessions"
+  on public.device_sessions for select
+  using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));
+
+-- ── Suspicious activity flags ─────────────────────────────────
+-- flag_type ∈ rapid_voting | new_account_burst | poll_creation_burst
+--            | ip_cluster | device_cluster | coordinated_voting
+create table if not exists public.suspicious_flags (
+  id          uuid default gen_random_uuid() primary key,
+  user_id     uuid references public.profiles(id) on delete cascade,
+  flag_type   text not null,
+  details     jsonb,
+  resolved    boolean default false,
+  resolved_by uuid references public.profiles(id),
+  resolved_at timestamptz,
+  created_at  timestamptz default now()
+);
+create index if not exists sf_user_id_idx    on public.suspicious_flags(user_id);
+create index if not exists sf_unresolved_idx on public.suspicious_flags(resolved, created_at) where not resolved;
+create index if not exists sf_type_idx       on public.suspicious_flags(flag_type);
+
+alter table public.suspicious_flags enable row level security;
+
+drop policy if exists "admins_manage_flags" on public.suspicious_flags;
+create policy "admins_manage_flags"
+  on public.suspicious_flags for all
+  using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));
+
+-- ── RPC: check_suspicious_behaviour ───────────────────────────
+-- Called at the end of cast_vote / join_challenge / create_poll.
+-- Raises a flag (and bumps profiles.flag_count) when a threshold trips.
+-- Dedupes: skips if an unresolved flag of the same type was raised in
+-- the last hour, so a single binge doesn't spam dozens of flags.
+create or replace function public.check_suspicious_behaviour(
+  p_user_id uuid,
+  p_poll_id uuid,
+  p_action  text            -- 'vote' or 'poll_created'
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_votes_last_10min  integer;
+  v_votes_last_hour   integer;
+  v_polls_last_hour   integer;
+  v_account_age_hours numeric;
+  v_existing_flag     uuid;
+begin
+  select extract(epoch from (now() - created_at)) / 3600
+    into v_account_age_hours
+  from profiles where id = p_user_id;
+
+  if p_action = 'vote' then
+    select count(*) into v_votes_last_10min
+    from votes
+    where user_id = p_user_id and created_at > now() - interval '10 minutes';
+
+    select count(*) into v_votes_last_hour
+    from votes
+    where user_id = p_user_id and created_at > now() - interval '1 hour';
+
+    -- Flag: voting too fast (10+ votes in 10 min)
+    if v_votes_last_10min >= 10 then
+      select id into v_existing_flag from suspicious_flags
+      where user_id = p_user_id and flag_type = 'rapid_voting'
+        and not resolved and created_at > now() - interval '1 hour'
+      limit 1;
+
+      if v_existing_flag is null then
+        insert into suspicious_flags (user_id, flag_type, details)
+        values (p_user_id, 'rapid_voting', jsonb_build_object(
+          'votes_last_10min', v_votes_last_10min,
+          'poll_id', p_poll_id,
+          'account_age_hours', round(v_account_age_hours, 1)
+        ));
+        update profiles set flag_count = coalesce(flag_count, 0) + 1, last_flag_at = now()
+        where id = p_user_id;
+      end if;
+    end if;
+
+    -- Flag: new account voting burst (under 24h old, 20+ votes in first hour)
+    if v_account_age_hours < 24 and v_votes_last_hour >= 20 then
+      v_existing_flag := null;
+      select id into v_existing_flag from suspicious_flags
+      where user_id = p_user_id and flag_type = 'new_account_burst'
+        and not resolved and created_at > now() - interval '1 hour'
+      limit 1;
+
+      if v_existing_flag is null then
+        insert into suspicious_flags (user_id, flag_type, details)
+        values (p_user_id, 'new_account_burst', jsonb_build_object(
+          'votes_last_hour', v_votes_last_hour,
+          'account_age_hours', round(v_account_age_hours, 1)
+        ));
+        update profiles set flag_count = coalesce(flag_count, 0) + 1, last_flag_at = now()
+        where id = p_user_id;
+      end if;
+    end if;
+  end if;
+
+  if p_action = 'poll_created' then
+    select count(*) into v_polls_last_hour
+    from polls
+    where created_by = p_user_id
+      and created_at > now() - interval '1 hour'
+      and deleted_at is null;
+
+    -- Flag: poll creation burst (3+ polls in an hour)
+    if v_polls_last_hour >= 3 then
+      select id into v_existing_flag from suspicious_flags
+      where user_id = p_user_id and flag_type = 'poll_creation_burst'
+        and not resolved and created_at > now() - interval '1 hour'
+      limit 1;
+
+      if v_existing_flag is null then
+        insert into suspicious_flags (user_id, flag_type, details)
+        values (p_user_id, 'poll_creation_burst', jsonb_build_object(
+          'polls_last_hour', v_polls_last_hour,
+          'account_age_hours', round(v_account_age_hours, 1)
+        ));
+        update profiles set flag_count = coalesce(flag_count, 0) + 1, last_flag_at = now()
+        where id = p_user_id;
+      end if;
+    end if;
+  end if;
+end;
+$$;
+grant execute on function public.check_suspicious_behaviour(uuid, uuid, text) to authenticated;
+
+-- ── RPC: detect_coordinated_voting ────────────────────────────
+-- Looks for clusters of similar-age accounts voting within 60s of each
+-- other on the same poll. Flags the poll when the cluster is large.
+-- Callable from the admin dashboard (admin) or a service/cron job
+-- (null auth.uid()); ordinary users are rejected.
+create or replace function public.detect_coordinated_voting(p_poll_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid          uuid := auth.uid();
+  v_cluster_size integer;
+begin
+  if v_uid is not null and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  select count(*) into v_cluster_size
+  from (
+    select v1.user_id
+    from votes v1
+    join votes v2
+      on v2.poll_id = v1.poll_id
+     and v2.user_id <> v1.user_id
+     and abs(extract(epoch from (v1.created_at - v2.created_at))) < 60
+    join profiles p1 on p1.id = v1.user_id
+    join profiles p2 on p2.id = v2.user_id
+    where v1.poll_id = p_poll_id
+      and abs(extract(epoch from (p1.created_at - p2.created_at))) < 86400
+    group by v1.user_id
+    having count(*) >= 3
+  ) clustered;
+
+  if v_cluster_size >= 5 then
+    update polls set is_flagged = true where id = p_poll_id;
+
+    insert into suspicious_flags (user_id, flag_type, details)
+    select v.user_id, 'coordinated_voting', jsonb_build_object(
+      'poll_id', p_poll_id, 'cluster_size', v_cluster_size
+    )
+    from (select distinct user_id from votes where poll_id = p_poll_id) v
+    where not exists (
+      select 1 from suspicious_flags sf
+      where sf.user_id = v.user_id and sf.flag_type = 'coordinated_voting'
+        and not sf.resolved
+        and (sf.details->>'poll_id') = p_poll_id::text
+    );
+
+    return jsonb_build_object('suspicious', true, 'cluster_size', v_cluster_size, 'poll_id', p_poll_id);
+  end if;
+
+  return jsonb_build_object('suspicious', false, 'cluster_size', v_cluster_size);
+end;
+$$;
+grant execute on function public.detect_coordinated_voting(uuid) to authenticated;
+
+-- ── Admin RPCs for the flags dashboard ────────────────────────
+create or replace function public.admin_get_flags()
+returns table(
+  id                 uuid,
+  user_id            uuid,
+  username           text,
+  flag_type          text,
+  details            jsonb,
+  resolved           boolean,
+  created_at         timestamptz,
+  account_created_at timestamptz,
+  user_flag_count    integer,
+  is_suspended       boolean
+)
+language sql security definer set search_path = public
+as $$
+  select
+    f.id, f.user_id, p.username, f.flag_type, f.details, f.resolved, f.created_at,
+    p.created_at, coalesce(p.flag_count, 0), coalesce(p.is_suspended, false)
+  from public.suspicious_flags f
+  left join public.profiles p on p.id = f.user_id
+  where exists (select 1 from profiles a where a.id = auth.uid() and a.is_admin = true)
+  order by f.created_at desc
+  limit 500;
+$$;
+grant execute on function public.admin_get_flags() to authenticated;
+
+create or replace function public.admin_resolve_flag(p_flag_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update suspicious_flags
+     set resolved = true, resolved_by = v_uid, resolved_at = now()
+   where id = p_flag_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_resolve_flag(uuid) to authenticated;
+
+create or replace function public.admin_warn_user(p_user_id uuid, p_note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles
+     set admin_notes = concat_ws(E'\n',
+           nullif(admin_notes, ''),
+           to_char(now(), 'YYYY-MM-DD HH24:MI') || ' — ' || coalesce(nullif(btrim(p_note), ''), 'Warning issued'))
+   where id = p_user_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_warn_user(uuid, text) to authenticated;
+
+create or replace function public.admin_clear_poll_flag(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_flagged = false where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_clear_poll_flag(uuid) to authenticated;
+
+-- ── cast_vote (v4 — account age stamp + behavioural check) ────
+create or replace function public.cast_vote(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles
+     set points = points + 10,
+         first_vote_at = coalesce(first_vote_at, now()),
+         updated_at = now()
+   where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 10, 'Vote reward', 'vote', p_poll_id
+  from profiles p where p.id = v_uid;
+
+  perform public.check_suspicious_behaviour(v_uid, p_poll_id, 'vote');
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+
+-- ── create_poll (v4 — account age gate + dynamic daily limit) ─
+create or replace function public.create_poll(
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null,
+  p_is_challenge   boolean default false,
+  p_challenge_pool integer default 0
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid              uuid := auth.uid();
+  v_poll_id          uuid;
+  v_idx              int;
+  v_is_challenge     boolean := coalesce(p_is_challenge, false);
+  v_account_age_days integer;
+  v_polls_today      integer;
+  v_max_polls        integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
+
+  -- Account age gate — admins are exempt (they create challenges etc.).
+  select extract(epoch from (now() - created_at))::integer / 86400
+    into v_account_age_days
+  from profiles where id = v_uid;
+
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    if v_account_age_days < 1 then
+      raise exception 'account_too_new_to_create_polls';
+    end if;
+
+    -- Dynamic daily limit: <7 days old → 2/day, otherwise 5/day.
+    v_max_polls := case when v_account_age_days < 7 then 2 else 5 end;
+
+    select count(*) into v_polls_today
+    from polls
+    where created_by = v_uid
+      and created_at > now() - interval '24 hours'
+      and deleted_at is null;
+
+    if v_polls_today >= v_max_polls then
+      raise exception 'daily_poll_limit_reached';
+    end if;
+  end if;
+
+  -- Only admins may create challenges.
+  if v_is_challenge and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password,
+                     is_challenge, challenge_pool, challenge_status)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          nullif(btrim(p_community_password), ''),
+          v_is_challenge,
+          case when v_is_challenge then greatest(coalesce(p_challenge_pool, 0), 0) else 0 end,
+          'active')
+  returning id into v_poll_id;
+
+  for v_idx in 1 .. array_length(p_options, 1) loop
+    insert into poll_options (poll_id, text, display_order)
+    values (v_poll_id, p_options[v_idx], v_idx);
+  end loop;
+
+  update profiles
+     set points = points + 30,
+         first_poll_at = coalesce(first_poll_at, now()),
+         updated_at = now()
+   where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 30, 'Poll creation reward', 'poll_created', v_poll_id
+  from profiles p where p.id = v_uid;
+
+  perform public.check_suspicious_behaviour(v_uid, v_poll_id, 'poll_created');
+
+  return v_poll_id;
+end;
+$$;
+
+-- ── join_challenge (v3 — account age stamp + behavioural check) ─
+create or replace function public.join_challenge(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+  v_poll    polls%rowtype;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if not v_poll.is_challenge then raise exception 'not_a_challenge'; end if;
+  if coalesce(v_poll.challenge_status, 'active') <> 'active' then
+    raise exception 'challenge_not_active';
+  end if;
+  if v_poll.expires_at <= now() then raise exception 'challenge_not_active'; end if;
+
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  insert into challenge_participants (poll_id, user_id, option_id)
+  values (p_poll_id, v_uid, p_option_id);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles
+     set points = points + 10,
+         first_vote_at = coalesce(first_vote_at, now()),
+         updated_at = now()
+   where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 10, 'Challenge join reward', 'challenge', p_poll_id
+  from profiles p where p.id = v_uid;
+
+  perform public.check_suspicious_behaviour(v_uid, p_poll_id, 'vote');
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+grant execute on function public.join_challenge(uuid, uuid, text, text) to authenticated;

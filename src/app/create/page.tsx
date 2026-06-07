@@ -9,7 +9,9 @@ import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
+import { getAccountAgeDays, getAccountPermissions } from '@/lib/accountAge'
 import { Turnstile } from '@marsidev/react-turnstile'
+import Link from 'next/link'
 
 const HOT_TAKE_MIN_TOKENS = 100
 
@@ -136,8 +138,10 @@ export default function CreatePollPage() {
 
     if (rpcError) {
       setError(
-        rpcError.message.includes('daily_poll_limit_reached')
-          ? "You've reached your daily limit of 5 polls. Come back tomorrow!"
+        rpcError.message.includes('account_too_new_to_create_polls')
+          ? 'Your account must be at least 24 hours old before you can create polls. Come back tomorrow!'
+          : rpcError.message.includes('daily_poll_limit_reached')
+          ? "You've reached your daily limit of polls. Come back tomorrow!"
           : rpcError.message
       )
       setBusy(false)
@@ -154,6 +158,14 @@ export default function CreatePollPage() {
   const step = !question.trim() ? 1 : filledOptions.length < 2 ? 2 : 3
 
   if (loading || !user) return null
+
+  // Account-age gate — mirrors the create_poll RPC. Admins are exempt.
+  if (profile && !profile.is_admin) {
+    const perms = getAccountPermissions(getAccountAgeDays(profile.created_at), profile.points)
+    if (!perms.canCreatePoll) {
+      return <NewAccountGate createdAt={profile.created_at} />
+    }
+  }
 
   return (
     <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
@@ -446,6 +458,48 @@ export default function CreatePollPage() {
           </button>
         </div>
       </form>
+    </main>
+  )
+}
+
+function NewAccountGate({ createdAt }: { createdAt: string }) {
+  const unlockAt = new Date(new Date(createdAt).getTime() + 86_400_000)
+  const fmt = (d: Date) =>
+    d.toLocaleString('en-NG', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: 'numeric', minute: '2-digit',
+    })
+  return (
+    <main className="max-w-md mx-auto px-4 sm:px-6 py-10 sm:py-16">
+      <div className="rounded-2xl border border-border bg-card shadow-sm p-6 sm:p-8 flex flex-col items-center text-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl">⏳</div>
+        <h1 className="text-xl sm:text-2xl font-black text-foreground">Almost ready to create polls!</h1>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Your account needs to be at least 24 hours old before you can create polls.
+          This helps us keep Pollit genuine and free from spam.
+        </p>
+
+        <div className="w-full bg-muted/60 rounded-xl px-4 py-3 flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Account created</span>
+            <span className="font-semibold text-foreground">{fmt(new Date(createdAt))}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">You can create polls</span>
+            <span className="font-semibold text-primary">{fmt(unlockAt)}</span>
+          </div>
+        </div>
+
+        <p className="text-sm text-foreground/80">
+          In the meantime, explore polls and vote to earn tokens 🗳️
+        </p>
+        <Link
+          href="/"
+          className="w-full bg-primary text-white font-bold text-base py-3.5 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all min-h-[52px] flex items-center justify-center"
+        >
+          Explore &amp; Vote
+        </Link>
+      </div>
     </main>
   )
 }
