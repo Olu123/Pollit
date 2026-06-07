@@ -210,7 +210,7 @@ begin
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
-  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+  update profiles      set points = points + 5, updated_at = now() where id = v_uid;
 
   return jsonb_build_object('success', true);
 exception
@@ -265,7 +265,7 @@ begin
     values (v_poll_id, p_options[v_idx], v_idx);
   end loop;
 
-  update profiles set points = points + 30, updated_at = now() where id = v_uid;
+  update profiles set points = points + 20, updated_at = now() where id = v_uid;
 
   return v_poll_id;
 end;
@@ -298,7 +298,7 @@ begin
   update profiles set referred_by = v_ref where id = v_uid;
   update profiles
      set referral_count = coalesce(referral_count, 0) + 1,
-         points = points + 100,
+         points = points + 30,
          updated_at = now()
    where id = v_ref;
 
@@ -715,7 +715,7 @@ begin
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
-  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+  update profiles      set points = points + 5, updated_at = now() where id = v_uid;
 
   return jsonb_build_object('success', true);
 exception
@@ -784,7 +784,7 @@ begin
     values (v_poll_id, p_options[v_idx], v_idx);
   end loop;
 
-  update profiles set points = points + 30, updated_at = now() where id = v_uid;
+  update profiles set points = points + 20, updated_at = now() where id = v_uid;
 
   return v_poll_id;
 end;
@@ -837,7 +837,7 @@ begin
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
-  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+  update profiles      set points = points + 7, updated_at = now() where id = v_uid;
 
   return jsonb_build_object('success', true);
 exception
@@ -1019,10 +1019,10 @@ begin
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
-  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+  update profiles      set points = points + 5, updated_at = now() where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 10, 'Vote reward', 'vote', p_poll_id
+  select v_uid, p.username, 5, 'Vote reward', 'vote', p_poll_id
   from profiles p where p.id = v_uid;
 
   return jsonb_build_object('success', true);
@@ -1086,10 +1086,10 @@ begin
     values (v_poll_id, p_options[v_idx], v_idx);
   end loop;
 
-  update profiles set points = points + 30, updated_at = now() where id = v_uid;
+  update profiles set points = points + 20, updated_at = now() where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 30, 'Poll creation reward', 'poll_created', v_poll_id
+  select v_uid, p.username, 20, 'Poll creation reward', 'poll_created', v_poll_id
   from profiles p where p.id = v_uid;
 
   return v_poll_id;
@@ -1139,10 +1139,10 @@ begin
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
-  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+  update profiles      set points = points + 7, updated_at = now() where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 10, 'Challenge join reward', 'challenge', p_poll_id
+  select v_uid, p.username, 7, 'Challenge join reward', 'challenge', p_poll_id
   from profiles p where p.id = v_uid;
 
   return jsonb_build_object('success', true);
@@ -1175,12 +1175,12 @@ begin
   update profiles set referred_by = v_ref where id = v_uid;
   update profiles
      set referral_count = coalesce(referral_count, 0) + 1,
-         points = points + 100,
+         points = points + 30,
          updated_at = now()
    where id = v_ref;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, created_by)
-  select v_ref, p.username, 100, 'Referral reward', 'referral', v_uid
+  select v_ref, p.username, 30, 'Referral reward', 'referral', v_uid
   from profiles p where p.id = v_ref;
 
   return jsonb_build_object('ok', true);
@@ -1630,13 +1630,13 @@ begin
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
   update profiles
-     set points = points + 10,
+     set points = points + 5,
          first_vote_at = coalesce(first_vote_at, now()),
          updated_at = now()
    where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 10, 'Vote reward', 'vote', p_poll_id
+  select v_uid, p.username, 5, 'Vote reward', 'vote', p_poll_id
   from profiles p where p.id = v_uid;
 
   perform public.check_suspicious_behaviour(v_uid, p_poll_id, 'vote');
@@ -1668,26 +1668,26 @@ declare
   v_uid              uuid := auth.uid();
   v_poll_id          uuid;
   v_idx              int;
-  v_is_challenge     boolean := coalesce(p_is_challenge, false);
-  v_account_age_days integer;
-  v_polls_today      integer;
-  v_max_polls        integer;
+  v_is_challenge      boolean := coalesce(p_is_challenge, false);
+  v_account_age_hours numeric;
+  v_polls_today       integer;
+  v_max_polls         integer;
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
 
   -- Account age gate — admins are exempt (they create challenges etc.).
-  select extract(epoch from (now() - created_at))::integer / 86400
-    into v_account_age_days
+  select extract(epoch from (now() - created_at)) / 3600
+    into v_account_age_hours
   from profiles where id = v_uid;
 
   if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
-    if v_account_age_days < 1 then
+    if v_account_age_hours < 1 then
       raise exception 'account_too_new_to_create_polls';
     end if;
 
-    -- Dynamic daily limit: <7 days old → 2/day, otherwise 5/day.
-    v_max_polls := case when v_account_age_days < 7 then 2 else 5 end;
+    -- Dynamic daily limit: under 7 days (168h) old → 2/day, otherwise 5/day.
+    v_max_polls := case when v_account_age_hours < 168 then 2 else 5 end;
 
     select count(*) into v_polls_today
     from polls
@@ -1726,13 +1726,13 @@ begin
   end loop;
 
   update profiles
-     set points = points + 30,
+     set points = points + 20,
          first_poll_at = coalesce(first_poll_at, now()),
          updated_at = now()
    where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 30, 'Poll creation reward', 'poll_created', v_poll_id
+  select v_uid, p.username, 20, 'Poll creation reward', 'poll_created', v_poll_id
   from profiles p where p.id = v_uid;
 
   perform public.check_suspicious_behaviour(v_uid, v_poll_id, 'poll_created');
@@ -1785,13 +1785,13 @@ begin
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
   update profiles
-     set points = points + 10,
+     set points = points + 7,
          first_vote_at = coalesce(first_vote_at, now()),
          updated_at = now()
    where id = v_uid;
 
   insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
-  select v_uid, p.username, 10, 'Challenge join reward', 'challenge', p_poll_id
+  select v_uid, p.username, 7, 'Challenge join reward', 'challenge', p_poll_id
   from profiles p where p.id = v_uid;
 
   perform public.check_suspicious_behaviour(v_uid, p_poll_id, 'vote');

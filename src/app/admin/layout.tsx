@@ -81,7 +81,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [flagCount, setFlagCount] = useState(0)
 
   useEffect(() => {
-    if (!loading && (!user || !profile?.is_admin)) router.replace('/')
+    if (loading) return
+    if (!user) { router.replace('/login'); return }
+    // Wait for the profile to load before judging admin status. AuthProvider
+    // flips `loading` to false as soon as the session resolves, but the
+    // profile is fetched in a later effect — without this guard the brief
+    // "user set, profile still null" window would bounce admins to home.
+    if (profile && !profile.is_admin) router.replace('/')
   }, [loading, user, profile, router])
 
   useEffect(() => {

@@ -9,7 +9,7 @@ import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
-import { getAccountAgeDays, getAccountPermissions } from '@/lib/accountAge'
+import { getAccountAgeDays, getAccountAgeHours, getAccountPermissions } from '@/lib/accountAge'
 import { Turnstile } from '@marsidev/react-turnstile'
 import Link from 'next/link'
 
@@ -139,7 +139,7 @@ export default function CreatePollPage() {
     if (rpcError) {
       setError(
         rpcError.message.includes('account_too_new_to_create_polls')
-          ? 'Your account must be at least 24 hours old before you can create polls. Come back tomorrow!'
+          ? 'Your account must be at least 1 hour old before you can create polls.'
           : rpcError.message.includes('daily_poll_limit_reached')
           ? "You've reached your daily limit of polls. Come back tomorrow!"
           : rpcError.message
@@ -161,7 +161,11 @@ export default function CreatePollPage() {
 
   // Account-age gate — mirrors the create_poll RPC. Admins are exempt.
   if (profile && !profile.is_admin) {
-    const perms = getAccountPermissions(getAccountAgeDays(profile.created_at), profile.points)
+    const perms = getAccountPermissions(
+      getAccountAgeDays(profile.created_at),
+      profile.points,
+      getAccountAgeHours(profile.created_at),
+    )
     if (!perms.canCreatePoll) {
       return <NewAccountGate createdAt={profile.created_at} />
     }
@@ -463,7 +467,7 @@ export default function CreatePollPage() {
 }
 
 function NewAccountGate({ createdAt }: { createdAt: string }) {
-  const unlockAt = new Date(new Date(createdAt).getTime() + 86_400_000)
+  const unlockAt = new Date(new Date(createdAt).getTime() + 3_600_000)
   const fmt = (d: Date) =>
     d.toLocaleString('en-NG', {
       weekday: 'short', day: 'numeric', month: 'short',
@@ -475,7 +479,7 @@ function NewAccountGate({ createdAt }: { createdAt: string }) {
         <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl">⏳</div>
         <h1 className="text-xl sm:text-2xl font-black text-foreground">Almost ready to create polls!</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Your account needs to be at least 24 hours old before you can create polls.
+          Your account needs to be at least 1 hour old before you can create polls.
           This helps us keep Pollit genuine and free from spam.
         </p>
 

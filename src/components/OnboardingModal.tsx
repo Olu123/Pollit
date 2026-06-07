@@ -71,8 +71,8 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
                 <span className="shrink-0">⏳</span>
                 <span>
                   {en
-                    ? 'Note: Poll creation is available after your first 24 hours — this helps keep Pollit genuine.'
-                    : 'Note: You fit make poll after 24 hours — e dey help us keep Pollit real.'}
+                    ? 'Note: Poll creation unlocks 1 hour after sign-up — this helps keep Pollit genuine.'
+                    : 'Note: You fit make poll 1 hour after you sign up — e dey help us keep Pollit real.'}
                 </span>
               </div>
             </div>
