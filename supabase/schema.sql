@@ -684,7 +684,7 @@ create policy "cp_read"   on public.challenge_participants for select using (tru
 create policy "cp_insert" on public.challenge_participants for insert with check (auth.uid() = user_id);
 
 -- ── RPC: cast_vote (v2 — hourly rate limit) ───────────────────
--- Max 100 votes per hour per user. Raises hourly_vote_limit_reached.
+-- Max 30 votes per hour per user. Raises hourly_vote_limit_reached.
 create or replace function public.cast_vote(
   p_poll_id   uuid,
   p_option_id uuid,
@@ -704,9 +704,9 @@ begin
     raise exception 'comment_too_long';
   end if;
 
-  -- Rate limit: max 100 votes per hour per user.
+  -- Rate limit: max 30 votes per hour per user.
   if (select count(*) from votes
-        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
     raise exception 'hourly_vote_limit_reached';
   end if;
 
@@ -724,7 +724,7 @@ end;
 $$;
 
 -- ── RPC: create_poll (v2 — challenge + daily rate limit) ──────
--- Max 10 polls per day per user. Raises daily_poll_limit_reached.
+-- Max 5 polls per day per user. Raises daily_poll_limit_reached.
 -- p_is_challenge requires the caller to be an admin.
 drop function if exists public.create_poll(text, text, text[], timestamptz, boolean, boolean, text, text, text);
 
@@ -753,9 +753,9 @@ begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
 
-  -- Rate limit: max 10 polls per day per user.
+  -- Rate limit: max 5 polls per day per user.
   if (select count(*) from polls
-        where created_by = v_uid and created_at > now() - interval '1 day') >= 10 then
+        where created_by = v_uid and created_at > now() - interval '1 day') >= 5 then
     raise exception 'daily_poll_limit_reached';
   end if;
 
@@ -823,9 +823,9 @@ begin
     raise exception 'comment_too_long';
   end if;
 
-  -- Rate limit: max 100 votes per hour per user.
+  -- Rate limit: max 30 votes per hour per user.
   if (select count(*) from votes
-        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
     raise exception 'hourly_vote_limit_reached';
   end if;
 
@@ -1010,7 +1010,7 @@ begin
   end if;
 
   if (select count(*) from votes
-        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
     raise exception 'hourly_vote_limit_reached';
   end if;
 
@@ -1058,7 +1058,7 @@ begin
   if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
 
   if (select count(*) from polls
-        where created_by = v_uid and created_at > now() - interval '1 day') >= 10 then
+        where created_by = v_uid and created_at > now() - interval '1 day') >= 5 then
     raise exception 'daily_poll_limit_reached';
   end if;
 
@@ -1127,7 +1127,7 @@ begin
   end if;
 
   if (select count(*) from votes
-        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 30 then
     raise exception 'hourly_vote_limit_reached';
   end if;
 

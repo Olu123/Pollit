@@ -137,7 +137,7 @@ export default function CreatePollPage() {
     if (rpcError) {
       setError(
         rpcError.message.includes('daily_poll_limit_reached')
-          ? "You've reached your daily limit of 10 polls. Come back tomorrow!"
+          ? "You've reached your daily limit of 5 polls. Come back tomorrow!"
           : rpcError.message
       )
       setBusy(false)
