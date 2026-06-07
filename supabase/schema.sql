@@ -653,3 +653,254 @@ declare v_uid uuid := auth.uid(); begin
   return jsonb_build_object('success', true);
 end; $$;
 grant execute on function public.admin_dismiss_report(uuid) to authenticated;
+
+-- ══════════════════════════════════════════════════════════════
+-- Challenges + Rate limiting — additions
+-- ══════════════════════════════════════════════════════════════
+
+-- ── Challenge columns on polls ────────────────────────────────
+alter table public.polls add column if not exists is_challenge          boolean not null default false;
+alter table public.polls add column if not exists challenge_pool        integer not null default 0;
+alter table public.polls add column if not exists challenge_status      text    not null default 'active';
+alter table public.polls add column if not exists challenge_distributed boolean not null default false;
+create index if not exists polls_is_challenge_idx on public.polls(is_challenge);
+
+-- ── Challenge participants ────────────────────────────────────
+create table if not exists public.challenge_participants (
+  id        uuid default gen_random_uuid() primary key,
+  poll_id   uuid references public.polls(id) on delete cascade not null,
+  user_id   uuid references public.profiles(id) on delete cascade not null,
+  option_id uuid references public.poll_options(id) on delete set null,
+  reward    integer not null default 0,
+  joined_at timestamptz not null default now(),
+  unique (poll_id, user_id)
+);
+create index if not exists cp_poll_id_idx on public.challenge_participants(poll_id);
+create index if not exists cp_user_id_idx on public.challenge_participants(user_id);
+
+alter table public.challenge_participants enable row level security;
+create policy "cp_read"   on public.challenge_participants for select using (true);
+create policy "cp_insert" on public.challenge_participants for insert with check (auth.uid() = user_id);
+
+-- ── RPC: cast_vote (v2 — hourly rate limit) ───────────────────
+-- Max 100 votes per hour per user. Raises hourly_vote_limit_reached.
+create or replace function public.cast_vote(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  -- Rate limit: max 100 votes per hour per user.
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+
+-- ── RPC: create_poll (v2 — challenge + daily rate limit) ──────
+-- Max 10 polls per day per user. Raises daily_poll_limit_reached.
+-- p_is_challenge requires the caller to be an admin.
+drop function if exists public.create_poll(text, text, text[], timestamptz, boolean, boolean, text, text, text);
+
+create or replace function public.create_poll(
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null,
+  p_is_challenge   boolean default false,
+  p_challenge_pool integer default 0
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_poll_id uuid;
+  v_idx     int;
+  v_is_challenge boolean := coalesce(p_is_challenge, false);
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
+
+  -- Rate limit: max 10 polls per day per user.
+  if (select count(*) from polls
+        where created_by = v_uid and created_at > now() - interval '1 day') >= 10 then
+    raise exception 'daily_poll_limit_reached';
+  end if;
+
+  -- Only admins may create challenges.
+  if v_is_challenge and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password,
+                     is_challenge, challenge_pool, challenge_status)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          nullif(btrim(p_community_password), ''),
+          v_is_challenge,
+          case when v_is_challenge then greatest(coalesce(p_challenge_pool, 0), 0) else 0 end,
+          'active')
+  returning id into v_poll_id;
+
+  for v_idx in 1 .. array_length(p_options, 1) loop
+    insert into poll_options (poll_id, text, display_order)
+    values (v_poll_id, p_options[v_idx], v_idx);
+  end loop;
+
+  update profiles set points = points + 30, updated_at = now() where id = v_uid;
+
+  return v_poll_id;
+end;
+$$;
+
+-- ── RPC: join_challenge ───────────────────────────────────────
+-- Casts a vote on a challenge poll and registers the user as a participant.
+-- Shares the hourly rate limit and +10 token reward with cast_vote; the
+-- challenge pool is paid out separately via distribute_challenge_tokens.
+create or replace function public.join_challenge(
+  p_poll_id   uuid,
+  p_option_id uuid,
+  p_comment   text default null,
+  p_state     text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_comment text := nullif(btrim(p_comment), '');
+  v_state   text := nullif(btrim(p_state), '');
+  v_poll    polls%rowtype;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if not v_poll.is_challenge then raise exception 'not_a_challenge'; end if;
+  if coalesce(v_poll.challenge_status, 'active') <> 'active' then
+    raise exception 'challenge_not_active';
+  end if;
+  if v_poll.expires_at <= now() then raise exception 'challenge_not_active'; end if;
+
+  if v_comment is not null and char_length(v_comment) > 280 then
+    raise exception 'comment_too_long';
+  end if;
+
+  -- Rate limit: max 100 votes per hour per user.
+  if (select count(*) from votes
+        where user_id = v_uid and created_at > now() - interval '1 hour') >= 100 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into votes (poll_id, option_id, user_id, comment, state)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+
+  insert into challenge_participants (poll_id, user_id, option_id)
+  values (p_poll_id, v_uid, p_option_id);
+
+  update poll_options set vote_count = vote_count + 1 where id = p_option_id;
+  update polls         set total_votes = total_votes + 1 where id = p_poll_id;
+  update profiles      set points = points + 10, updated_at = now() where id = v_uid;
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+grant execute on function public.join_challenge(uuid, uuid, text, text) to authenticated;
+
+-- ── RPC: distribute_challenge_tokens ──────────────────────────
+-- Admin-only. Splits the challenge pool equally among all participants,
+-- credits their token balances, logs token_transactions, and marks the
+-- challenge completed + distributed (idempotent).
+create or replace function public.distribute_challenge_tokens(p_poll_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_poll   polls%rowtype;
+  v_count  integer;
+  v_each   integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then raise exception 'poll_not_found'; end if;
+  if not v_poll.is_challenge then raise exception 'not_a_challenge'; end if;
+  if v_poll.challenge_distributed then raise exception 'already_distributed'; end if;
+
+  select count(*) into v_count from challenge_participants where poll_id = p_poll_id;
+  if v_count = 0 then
+    update polls
+       set challenge_distributed = true, challenge_status = 'completed'
+     where id = p_poll_id;
+    return jsonb_build_object('success', true, 'participants', 0, 'each', 0);
+  end if;
+
+  v_each := floor(coalesce(v_poll.challenge_pool, 0) / v_count);
+
+  if v_each > 0 then
+    update challenge_participants set reward = v_each where poll_id = p_poll_id;
+
+    update profiles p
+       set points = points + v_each, updated_at = now()
+      from challenge_participants cp
+     where cp.poll_id = p_poll_id and cp.user_id = p.id;
+
+    insert into token_transactions (user_id, amount, reason, created_by)
+    select cp.user_id, v_each, 'Challenge reward', v_uid
+      from challenge_participants cp
+     where cp.poll_id = p_poll_id;
+  end if;
+
+  update polls
+     set challenge_distributed = true, challenge_status = 'completed'
+   where id = p_poll_id;
+
+  return jsonb_build_object('success', true, 'participants', v_count, 'each', v_each);
+end;
+$$;
+grant execute on function public.distribute_challenge_tokens(uuid) to authenticated;
+
+-- ── Realtime ──────────────────────────────────────────────────
+alter publication supabase_realtime add table public.challenge_participants;

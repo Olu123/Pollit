@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Loader2, Users2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, Users2, Trophy } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
@@ -56,11 +56,15 @@ export default function CreatePollPage() {
   const [communityName, setCommunityName] = useState('')
   const [communityCode, setCommunityCode] = useState('')
   const [communityPassword, setCommunityPassword] = useState('')
+  const [isChallenge, setChallenge] = useState(false)
+  const [challengePool, setChallengePool] = useState('')
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
+  const isAdmin = !!profile?.is_admin
+  const poolNum = Math.max(0, Math.floor(Number(challengePool) || 0))
 
   function toggleCommunity() {
     setCommunity((v) => {
@@ -113,6 +117,7 @@ export default function CreatePollPage() {
     }
 
     setBusy(true)
+    const makeChallenge = isAdmin && isChallenge && !isCommunity
     const expiresAt = new Date(Date.now() + expiryDays * 86_400_000).toISOString()
 
     const { data: pollId, error: rpcError } = await supabase.rpc('create_poll', {
@@ -120,11 +125,13 @@ export default function CreatePollPage() {
       p_category:    category,
       p_options:     trimmed,
       p_expires_at:  expiresAt,
-      p_is_hot_take: canHotTake && isHotTake && !isCommunity,
+      p_is_hot_take: canHotTake && isHotTake && !isCommunity && !makeChallenge,
       p_is_community: isCommunity,
       p_community_name: isCommunity ? communityName.trim() || null : null,
       p_community_code: isCommunity ? communityCode : null,
       p_community_password: isCommunity ? communityPassword.trim() || null : null,
+      p_is_challenge: makeChallenge,
+      p_challenge_pool: makeChallenge ? poolNum : 0,
     })
 
     if (rpcError) {
@@ -219,6 +226,59 @@ export default function CreatePollPage() {
               <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isHotTake ? 'translate-x-5' : ''}`} />
             </span>
           </button>
+        )}
+
+        {/* Challenge toggle — admin only */}
+        {isAdmin && (
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setChallenge((v) => !v)}
+              aria-pressed={isChallenge}
+              className={`flex items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                isChallenge ? 'border-amber-500 bg-amber-50' : 'border-border hover:border-amber-500/40'
+              }`}
+            >
+              <div>
+                <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Trophy size={15} className="text-amber-500" /> {t('challenge.toggle')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('challenge.toggleSub')}</p>
+              </div>
+              <span className={`w-11 h-6 rounded-full p-0.5 shrink-0 transition-colors ${isChallenge ? 'bg-amber-500' : 'bg-muted'}`}>
+                <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isChallenge ? 'translate-x-5' : ''}`} />
+              </span>
+            </button>
+
+            {isChallenge && (
+              <div className="flex flex-col gap-2 pl-1">
+                <label className="block text-sm font-semibold text-foreground">{t('challenge.poolLabel')}</label>
+                <div className="flex items-center gap-2 border border-border rounded-xl px-4 min-h-[44px] focus-within:ring-2 focus-within:ring-amber-400">
+                  <Trophy size={15} className="text-amber-500 shrink-0" />
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={challengePool}
+                    onChange={(e) => setChallengePool(e.target.value)}
+                    placeholder="e.g. 5000"
+                    className="flex-1 bg-transparent text-base outline-none py-2.5 tabular-nums"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">{t('challenge.tokens')}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{t('challenge.poolHint')}</p>
+                {poolNum > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <p className="text-xs text-amber-700">{t('challenge.estReward')}</p>
+                    <p className="text-lg font-black text-amber-700 tabular-nums">
+                      ≈ {Math.floor(poolNum / 50).toLocaleString()} {t('challenge.tokens')}
+                    </p>
+                    <p className="text-xs text-amber-700/80">{t('challenge.estRewardSub')} · if 50 join</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Community poll toggle */}

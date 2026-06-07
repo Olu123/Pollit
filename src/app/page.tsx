@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { TrendingUp, Plus, Users, BarChart2 } from 'lucide-react'
+import { TrendingUp, Plus, Users, BarChart2, Trophy, Clock, Coins } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import PollCard from '@/components/PollCard'
 import HotTakeCard from '@/components/HotTakeCard'
@@ -38,6 +38,25 @@ async function getPolls(category: CategoryFilter): Promise<Poll[]> {
     console.error('Polls fetch error:', error.message)
     return []
   }
+  return (data ?? []) as unknown as Poll[]
+}
+
+async function getActiveChallenges(): Promise<Poll[]> {
+  const { data, error } = await supabase
+    .from('polls')
+    .select(`
+      id, question, category, created_by, expires_at, total_votes,
+      is_challenge, challenge_pool, challenge_status,
+      options:poll_options ( id, vote_count )
+    `)
+    .eq('is_challenge', true)
+    .eq('challenge_status', 'active')
+    .is('deleted_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) return []
   return (data ?? []) as unknown as Poll[]
 }
 
@@ -81,7 +100,9 @@ export default async function HomePage({
   const active: CategoryFilter =
     CATEGORIES.includes(category as CategoryFilter) ? (category as CategoryFilter) : 'All'
 
-  const [polls, totals, hotTakes] = await Promise.all([getPolls(active), getTotals(), getHotTakes()])
+  const [polls, totals, hotTakes, challenges] = await Promise.all([
+    getPolls(active), getTotals(), getHotTakes(), getActiveChallenges(),
+  ])
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
@@ -113,6 +134,25 @@ export default async function HomePage({
         <Stat icon={<TrendingUp size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.voteCount)} label={<T k="home.statVotes" />} />
         <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label={<T k="home.statUsers" />} />
       </div>
+
+      {/* 🏆 Active Challenges row */}
+      {challenges.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-foreground flex items-center gap-2">
+              <T k="home.challenges" />
+            </h2>
+            <Link href="/challenges" className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
+              <T k="challenge.view" /> →
+            </Link>
+          </div>
+          <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
+            {challenges.map((poll) => (
+              <HomeChallengeCard key={poll.id} poll={poll} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 🔥 Hot Takes row */}
       {hotTakes.length > 0 && (
@@ -185,6 +225,45 @@ export default async function HomePage({
         </div>
       )}
     </main>
+  )
+}
+
+function timeLeftShort(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now()
+  if (diff <= 0) return 'Ended'
+  const d = Math.floor(diff / 86_400_000)
+  const h = Math.floor((diff % 86_400_000) / 3_600_000)
+  if (d > 0) return `${d}d ${h}h`
+  const m = Math.floor((diff % 3_600_000) / 60_000)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+function HomeChallengeCard({ poll }: { poll: Poll }) {
+  return (
+    <Link
+      href={`/polls/${poll.id}`}
+      className="snap-start shrink-0 w-72 rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 to-white p-4 flex flex-col gap-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500 text-white">
+          <Trophy size={12} strokeWidth={2.5} /> <T k="challenge.badge" />
+        </span>
+        <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+          <Clock size={11} strokeWidth={2.5} />{timeLeftShort(poll.expires_at)}
+        </span>
+      </div>
+      <h3 className="font-bold text-foreground text-[15px] leading-snug line-clamp-2 min-h-[40px]">{poll.question}</h3>
+      <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-amber-200">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+          <Coins size={13} strokeWidth={2.5} />
+          {poll.challenge_pool.toLocaleString()} <T k="challenge.tokens" />
+        </span>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+          <Users size={12} strokeWidth={2.5} />{poll.total_votes.toLocaleString()}
+        </span>
+      </div>
+    </Link>
   )
 }
 

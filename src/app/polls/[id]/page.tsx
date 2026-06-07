@@ -15,7 +15,8 @@ import { shareMessages, whatsappHref } from '@/lib/share'
 
 const POLL_SELECT = `
   id, question, category, created_by, expires_at, total_votes, is_hot_take,
-  is_community, community_name, community_code, community_password, created_at,
+  is_community, community_name, community_code, community_password,
+  is_challenge, challenge_pool, challenge_status, challenge_distributed, created_at,
   profile:profiles!created_by ( id, username, avatar_url ),
   options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
 `

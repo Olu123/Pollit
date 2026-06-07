@@ -13,6 +13,7 @@ import type { StringKey } from '@/lib/i18n'
 const NAV_LINKS: { href: string; key: StringKey }[] = [
   { href: '/', key: 'nav.home' },
   { href: '/pulse', key: 'nav.pulse' },
+  { href: '/challenges', key: 'nav.challenges' },
   { href: '/leaderboard', key: 'nav.leaderboard' },
   { href: '/invite', key: 'nav.invite' },
 ]

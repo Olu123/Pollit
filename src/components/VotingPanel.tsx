@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw } from 'lucide-react'
+import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw, Trophy } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
@@ -80,6 +80,9 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [comments, setComments]    = useState<PollComment[]>([])
   const [revealing, setRevealing]  = useState(false)
   const [insight, setInsight]      = useState('')
+  const [justJoined, setJustJoined] = useState(false)
+
+  const isChallenge = !!poll.is_challenge
 
   // Edit window + vote-change window
   const [nowTs, setNowTs]          = useState(() => Date.now())
@@ -250,7 +253,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     setVoteError('')
 
     // Offline → queue the vote and register background sync; confirm optimistically.
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    // (Challenge polls always go through the live RPC so participation is recorded.)
+    if (!isChallenge && typeof navigator !== 'undefined' && !navigator.onLine) {
       enqueueVote({ poll_id: poll.id, option_id: optionId, comment: text })
       try {
         const reg = await navigator.serviceWorker?.ready
@@ -262,7 +266,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       return
     }
 
-    const { error } = await supabase.rpc('cast_vote', {
+    // Challenge polls register participation via join_challenge; regular polls cast_vote.
+    const { error } = await supabase.rpc(isChallenge ? 'join_challenge' : 'cast_vote', {
       p_poll_id:   poll.id,
       p_option_id: optionId,
       p_comment:   text,
@@ -275,6 +280,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           ? t('vote.already')
           : error.message.includes('hourly_vote_limit_reached')
           ? "You're voting too fast! Please slow down."
+          : error.message.includes('challenge_not_active')
+          ? t('vote.pollEnded')
           : error.message
       )
       setVoting(false)
@@ -283,6 +290,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
     setVoting(false)
     if (text) loadComments()
+    if (isChallenge) setJustJoined(true)
     runResultMoment(optionId)
   }
 
@@ -453,6 +461,11 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       </div>
 
+      {/* Challenge banner */}
+      {isChallenge && !votedOptionId && !justJoined && (
+        <ChallengeBanner pool={poll.challenge_pool} />
+      )}
+
       {/* Vote selection OR results */}
       {showResults ? (
         <ResultsBars
@@ -548,8 +561,32 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
+      {/* Challenge join celebration */}
+      {isChallenge && justJoined && (
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-5 flex flex-col gap-3 animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <Trophy size={20} className="shrink-0" />
+            <p className="text-lg font-black leading-snug">{t('challenge.joined')}</p>
+          </div>
+          <p className="text-sm text-white/90 leading-snug">{t('challenge.joinedSub')}</p>
+          {poll.challenge_pool > 0 && (
+            <p className="text-sm font-bold">
+              {t('challenge.pool')}: {poll.challenge_pool.toLocaleString()} {t('challenge.tokens')} 🪙
+            </p>
+          )}
+          <a
+            href={whatsappHref(shareMessages.challenge(poll.id, poll.question, poll.challenge_pool))}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 bg-white text-amber-600 text-sm font-bold px-5 min-h-[44px] rounded-full hover:brightness-95 active:scale-95 transition-all"
+          >
+            {t('challenge.share')}
+          </a>
+        </div>
+      )}
+
       {/* Surprise insight + share */}
-      {votedOptionId && insight && (
+      {votedOptionId && !justJoined && insight && (
         <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-xl p-5 flex flex-col gap-3 animate-fade-in-up">
           <p className="text-base font-bold leading-snug">{insight}</p>
           <a
@@ -685,6 +722,23 @@ function ResultsBars({
       <p className="text-xs text-muted-foreground text-right border-t border-border pt-2.5 mt-1">
         {total.toLocaleString()} {t('vote.totalVotes')}
       </p>
+    </div>
+  )
+}
+
+// ── Challenge banner ──────────────────────────────────────────
+
+function ChallengeBanner({ pool }: { pool: number }) {
+  const { t } = useLanguage()
+  return (
+    <div className="flex items-start gap-2.5 bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-300 text-amber-800 rounded-xl px-4 py-3">
+      <Trophy size={18} strokeWidth={2.5} className="mt-0.5 shrink-0 text-amber-500" />
+      <div className="min-w-0">
+        <p className="text-xs font-bold uppercase tracking-wide">{t('challenge.badge')}</p>
+        <p className="text-sm font-semibold leading-snug">
+          {t('challenge.banner')} {pool.toLocaleString()} {t('challenge.tokens')} 🪙
+        </p>
+      </div>
     </div>
   )
 }

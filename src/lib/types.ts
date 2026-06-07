@@ -45,6 +45,10 @@ export interface Poll {
   community_name: string | null
   community_code: string | null
   community_password: string | null
+  is_challenge: boolean
+  challenge_pool: number
+  challenge_status: string
+  challenge_distributed: boolean
   deleted_at: string | null
   created_at: string
   profile: Profile | null

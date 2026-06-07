@@ -20,6 +20,9 @@ export const shareMessages = {
   community: (id: string, question: string, communityName: string, code: string) =>
     `${communityName} wants your vote! 🏘️\n${question}\nInvite code: ${code}\n${url(id)}\n#Pollit`,
 
+  challenge: (id: string, question: string, pool: number) =>
+    `🏆 CHALLENGE on Pollit!\n${question}\nJoin now and share the ${pool.toLocaleString()} token pool! 🪙\n${url(id)}\n#Pollit #Challenge`,
+
   invite: (username: string) =>
     `Invite friends to Pollit and earn 100 tokens each! 🎁\nUse my link: ${SITE_DOMAIN}?ref=${username}`,
 
