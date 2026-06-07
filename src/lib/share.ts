@@ -24,7 +24,7 @@ export const shareMessages = {
     `🏆 CHALLENGE on Pollit!\n${question}\nJoin now and share the ${pool.toLocaleString()} token pool! 🪙\n${url(id)}\n#Pollit #Challenge`,
 
   invite: (username: string) =>
-    `Invite friends to Pollit and earn 100 tokens each! 🎁\nUse my link: ${SITE_DOMAIN}?ref=${username}`,
+    `Invite friends to Pollit and earn 30 tokens each! 🎁\nUse my link: ${SITE_DOMAIN}?ref=${username}`,
 
   myCard: () =>
     `See my Nigerian identity on Pollit! What's yours? 👉 ${SITE_DOMAIN}`,

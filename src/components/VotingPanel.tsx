@@ -539,7 +539,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 {voting ? (
                   <><Loader2 size={17} className="animate-spin" /> {t('vote.submitting')}</>
                 ) : (
-                  `${t('vote.submit')} (+10 tokens)`
+                  `${t('vote.submit')} (+${isChallenge ? 7 : 5} tokens)`
                 )}
               </button>
             </div>
@@ -556,7 +556,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
             <strong>&ldquo;{poll.options.find((o) => o.id === votedOptionId)?.text}&rdquo;</strong>
           </span>
           <span className="flex items-center gap-1 text-xs font-semibold shrink-0 mt-0.5">
-            <Star size={11} /> +10 tokens
+            <Star size={11} /> +{isChallenge ? 7 : 5} tokens
           </span>
         </div>
       )}
@@ -613,7 +613,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         <div className="flex flex-col items-center gap-3 py-2 text-center">
           <p className="text-sm text-muted-foreground">
             {t('vote.signInPrompt')}{' '}
-            <span className="text-primary font-semibold">+10 tokens</span>.
+            <span className="text-primary font-semibold">+{isChallenge ? 7 : 5} tokens</span>.
           </p>
           <Link
             href="/login"

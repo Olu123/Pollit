@@ -165,8 +165,8 @@ export default async function LeaderboardPage({
       )}
 
       <p className="text-center text-xs text-muted-foreground pt-2">
-        Earn <span className="text-primary font-semibold">+10 tokens</span> per vote ·{' '}
-        <span className="text-primary font-semibold">+30 tokens</span> per poll created
+        Earn <span className="text-primary font-semibold">+5 tokens</span> per vote ·{' '}
+        <span className="text-primary font-semibold">+20 tokens</span> per poll created
       </p>
     </main>
   )

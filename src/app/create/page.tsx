@@ -176,7 +176,7 @@ export default function CreatePollPage() {
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">{t('create.title')}</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
-          {t('create.subtitlePre')} <span className="text-primary font-semibold">+30 tokens</span> {t('create.subtitlePost')}
+          {t('create.subtitlePre')} <span className="text-primary font-semibold">+20 tokens</span> {t('create.subtitlePost')}
         </p>
       </div>
 
@@ -457,7 +457,7 @@ export default function CreatePollPage() {
             {busy ? (
               <><Loader2 size={17} className="animate-spin" /> {t('create.publishing')}</>
             ) : (
-              `${t('create.publish')} (+30 tokens)`
+              `${t('create.publish')} (+20 tokens)`
             )}
           </button>
         </div>

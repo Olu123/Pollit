@@ -93,7 +93,7 @@ export default function InvitePage() {
       </a>
 
       <p className="text-center text-xs text-muted-foreground">
-        Earn <span className="text-primary font-semibold">100 tokens</span> for each friend who joins with your link.
+        Earn <span className="text-primary font-semibold">30 tokens</span> for each friend who joins with your link.
       </p>
     </main>
   )

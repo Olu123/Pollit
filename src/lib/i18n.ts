@@ -35,7 +35,7 @@ export const STRINGS = {
   'card.regenerate':    { en: 'Regenerate', pid: 'Do am again' },
   'card.deciding':      { en: 'Still deciding... 🤔', pid: 'Still dey decide... 🤔' },
   'invite.title':       { en: 'Invite friends, earn tokens', pid: 'Invite friends, collect tokens' },
-  'invite.sub':         { en: 'Earn 100 tokens for every friend who joins and votes.', pid: 'Collect 100 tokens for every friend wey join and vote.' },
+  'invite.sub':         { en: 'Earn 30 tokens for every friend who joins and votes.', pid: 'Collect 30 tokens for every friend wey join and vote.' },
   'invite.yourLink':    { en: 'Your referral link', pid: 'Your referral link' },
   'invite.copy':        { en: 'Copy', pid: 'Copy' },
   'invite.copied':      { en: 'Copied!', pid: 'Copied!' },

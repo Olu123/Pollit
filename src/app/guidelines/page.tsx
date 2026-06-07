@@ -93,9 +93,10 @@ export default function GuidelinesPage() {
 
       <Section title="Tokens & Rewards">
         <List mark="•" items={[
-          'You earn 10 tokens per vote',
-          'You earn 30 tokens per poll created',
-          'You earn 100 tokens per successful referral',
+          'You earn 5 tokens per vote',
+          'You earn 20 tokens per poll created',
+          'You earn 7 tokens per challenge joined',
+          'You earn 30 tokens per successful referral',
           'Tokens appear on the leaderboard',
           'Token values and utility will grow as the platform grows',
           'Tokens are non-transferable between accounts',

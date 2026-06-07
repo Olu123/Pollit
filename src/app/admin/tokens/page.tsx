@@ -16,10 +16,10 @@ interface Transaction {
 interface UserResult { id: string; username: string | null; points: number }
 
 const EARN_RATES = [
-  { action: 'Cast a vote',           tokens: 10 },
-  { action: 'Create a poll',         tokens: 30 },
-  { action: 'Refer a friend',        tokens: 100 },
-  { action: 'Hot Take poll (bonus)', tokens: 50 },
+  { action: 'Cast a vote',      tokens: 5 },
+  { action: 'Create a poll',    tokens: 20 },
+  { action: 'Join a challenge', tokens: 7 },
+  { action: 'Refer a friend',   tokens: 30 },
 ]
 
 export default function AdminTokensPage() {
