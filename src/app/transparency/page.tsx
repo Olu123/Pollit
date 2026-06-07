@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/components/LanguageProvider'
-import { SITE_DOMAIN } from '@/lib/site'
+import { SITE_URL } from '@/lib/site'
 import { TOTAL_SUPPLY, type TokenTransaction } from '@/lib/transparency'
 
 const PAGE_SIZE = 50
@@ -437,7 +437,7 @@ export default function TransparencyPage() {
         </div>
         <p className="text-xs text-muted-foreground">
           {en ? 'You can verify this yourself using our public API: ' : 'You fit verify am yourself with our public API: '}
-          <a href="/api/transparency" className="text-primary font-semibold hover:underline">{SITE_DOMAIN}/api/transparency</a>
+          <a href="/api/transparency" className="text-primary font-semibold hover:underline">{SITE_URL}/api/transparency</a>
         </p>
       </section>
 
