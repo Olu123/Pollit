@@ -55,7 +55,7 @@ export default function LoginPage() {
   function switchTab(t: Tab) { setTab(t); reset() }
 
   // ── Social ─────────────────────────────────────────────────────
-  async function handleOAuth(provider: 'google' | 'facebook' | 'twitter') {
+  async function handleOAuth(provider: 'google' | 'facebook' | 'x') {
     setBusy(true); reset()
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -205,7 +205,7 @@ export default function LoginPage() {
                 <FacebookIcon /> Continue with Facebook
               </button>
               <button
-                onClick={() => handleOAuth('twitter')}
+                onClick={() => handleOAuth('x')}
                 disabled={busy}
                 className="w-full flex items-center justify-center gap-3 bg-black text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-zinc-800 active:scale-[0.99] transition-all disabled:opacity-60"
               >
