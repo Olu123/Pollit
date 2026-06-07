@@ -9,6 +9,7 @@ import PwaRegister from '@/components/PwaRegister'
 import PageFade from '@/components/PageFade'
 import ReferralTracker from '@/components/ReferralTracker'
 import { OnboardingProvider } from '@/components/OnboardingProvider'
+import PostHogProvider from '@/components/PostHogProvider'
 import SiteFooter from '@/components/SiteFooter'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 
@@ -40,14 +41,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LanguageProvider>
           <ToastProvider>
           <AuthProvider>
-            <OnboardingProvider>
-              <Navbar />
-              <AnnouncementBanner />
-              <PageFade className="flex-1">{children}</PageFade>
-              <SiteFooter />
-              <PwaRegister />
-              <ReferralTracker />
-            </OnboardingProvider>
+            <PostHogProvider>
+              <OnboardingProvider>
+                <Navbar />
+                <AnnouncementBanner />
+                <PageFade className="flex-1">{children}</PageFade>
+                <SiteFooter />
+                <PwaRegister />
+                <ReferralTracker />
+              </OnboardingProvider>
+            </PostHogProvider>
           </AuthProvider>
           </ToastProvider>
         </LanguageProvider>

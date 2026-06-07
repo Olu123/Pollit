@@ -10,6 +10,7 @@ import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
 import { getAccountAgeDays, getAccountAgeHours, getAccountPermissions } from '@/lib/accountAge'
+import { analytics } from '@/lib/analytics'
 import { Turnstile } from '@marsidev/react-turnstile'
 import Link from 'next/link'
 
@@ -147,6 +148,12 @@ export default function CreatePollPage() {
       setBusy(false)
       return
     }
+    analytics.pollCreated(
+      category,
+      canHotTake && isHotTake && !isCommunity && !makeChallenge,
+      isCommunity,
+      makeChallenge,
+    )
     if (isCommunity && communityCode) {
       router.push(`/polls/${pollId}?code=${communityCode}`)
     } else {

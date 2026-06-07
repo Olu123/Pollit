@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import { shareMessages, whatsappHref } from '@/lib/share'
 import { SITE_DOMAIN } from '@/lib/site'
+import { analytics } from '@/lib/analytics'
 
 export default function InvitePage() {
   const { user, profile, loading } = useAuth()
@@ -25,6 +26,7 @@ export default function InvitePage() {
   function copy() {
     navigator.clipboard?.writeText(`https://${link}`).then(() => {
       setCopied(true)
+      analytics.referralLinkCopied()
       setTimeout(() => setCopied(false), 1500)
     })
   }

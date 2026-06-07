@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import PollCard from '@/components/PollCard'
 import HotTakeCard from '@/components/HotTakeCard'
 import { T } from '@/components/LanguageProvider'
+import SentryTestButton from '@/components/SentryTestButton'
 import type { Poll, PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 
@@ -106,6 +107,7 @@ export default async function HomePage({
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
+      <SentryTestButton />
       {/* Hero */}
       <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
         <div>

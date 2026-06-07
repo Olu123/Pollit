@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, User, Share2, Users2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Poll } from '@/lib/types'
 import VotingPanel from '@/components/VotingPanel'
+import PollViewTracker from '@/components/PollViewTracker'
 import StateBreakdown from '@/components/StateBreakdown'
 import FloatingShare from '@/components/FloatingShare'
 import CommunityGate from '@/components/CommunityGate'
@@ -92,6 +93,7 @@ export default async function PollPage({
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      <PollViewTracker pollId={poll.id} category={poll.category} isChallenge={poll.is_challenge} />
       <FloatingShare href={links.whatsapp} />
 
       {/* Back link + actions */}

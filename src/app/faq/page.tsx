@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Search, ChevronDown, ThumbsUp, ThumbsDown, MessageCircle, HelpCircle } from 'lucide-react'
+import ViewTracker from '@/components/ViewTracker'
 
 type Category =
   | 'About Pollit'
@@ -242,6 +243,7 @@ export default function FaqPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <ViewTracker event="faq" />
       <div className="flex flex-col items-center text-center gap-3 mb-8">
         <div className="w-14 h-14 rounded-2xl bg-primary-light flex items-center justify-center text-primary">
           <HelpCircle size={26} />

@@ -14,6 +14,7 @@ import { enqueueVote } from '@/lib/voteQueue'
 import { NIGERIAN_STATES } from '@/lib/states'
 import { getInsight } from '@/lib/insights'
 import { shareMessages, whatsappHref } from '@/lib/share'
+import { analytics } from '@/lib/analytics'
 import { sanitizeComment } from '@/lib/sanitize'
 
 function timeRemaining(expiresAt: string) {
@@ -261,6 +262,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         // @ts-expect-error - background sync isn't in the TS DOM lib yet
         await reg?.sync?.register('sync-votes')
       } catch { /* sync unsupported — flush happens on reconnect */ }
+      analytics.pollVoted(poll.id, poll.category, !!text, stateVal)
       applyVoted(optionId)
       setVoting(false)
       return
@@ -289,6 +291,11 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     }
 
     setVoting(false)
+    if (isChallenge) {
+      analytics.challengeJoined(poll.id, poll.challenge_pool)
+    } else {
+      analytics.pollVoted(poll.id, poll.category, !!text, stateVal)
+    }
     if (text) loadComments()
     if (isChallenge) setJustJoined(true)
     runResultMoment(optionId)
@@ -578,6 +585,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
             href={whatsappHref(shareMessages.challenge(poll.id, poll.question, poll.challenge_pool))}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => analytics.pollShared(poll.id, 'whatsapp')}
             className="inline-flex items-center justify-center gap-2 bg-white text-amber-600 text-sm font-bold px-5 min-h-[44px] rounded-full hover:brightness-95 active:scale-95 transition-all"
           >
             {t('challenge.share')}
@@ -601,6 +609,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
             )}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => analytics.pollShared(poll.id, 'whatsapp')}
             className="inline-flex items-center justify-center gap-2 bg-[#25D366] text-white text-sm font-bold px-5 min-h-[44px] rounded-full hover:brightness-95 active:scale-95 transition-all"
           >
             {t('result.shareResult')}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Flame, TrendingUp, Zap, MessageCircle, LayoutGrid, Users, Trophy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { T } from '@/components/LanguageProvider'
+import ViewTracker from '@/components/ViewTracker'
 import type { StringKey } from '@/lib/i18n'
 import type { PollCategory } from '@/lib/types'
 import { SITE_DOMAIN as SITE } from '@/lib/site'
@@ -154,6 +155,7 @@ export default async function PulsePage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-8">
+      <ViewTracker event="pulse" />
       {/* Header */}
       <header className="text-center flex flex-col items-center gap-1.5">
         <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">

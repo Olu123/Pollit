@@ -8,6 +8,7 @@ import {
   Mail, Phone, Globe,
 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { analytics } from '@/lib/analytics'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { Turnstile } from '@marsidev/react-turnstile'
@@ -70,6 +71,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (error) { setError(error.message); return }
+    analytics.userSignedIn('email')
     router.push('/')
   }
 
@@ -85,6 +87,7 @@ export default function LoginPage() {
     setBusy(false)
     if (error) { setError(error.message); return }
     if (data.session) {
+      analytics.userSignedUp('email')
       router.push('/profile')
     } else {
       setInfo('Check your email to confirm your account, then sign in.')
@@ -137,6 +140,7 @@ export default function LoginPage() {
     })
     setBusy(false)
     if (error) { setError(error.message); return }
+    analytics.userSignedIn('phone')
     router.push('/')
   }
 

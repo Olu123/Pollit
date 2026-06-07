@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Star, BarChart2, CheckSquare, Trophy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { T } from '@/components/LanguageProvider'
+import ViewTracker from '@/components/ViewTracker'
 import type { StringKey } from '@/lib/i18n'
 
 export const revalidate = 300 // re-fetch at most every 5 minutes
@@ -112,6 +113,7 @@ export default async function LeaderboardPage({
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6">
+      <ViewTracker event="leaderboard" />
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useLanguage } from '@/components/LanguageProvider'
+import ViewTracker from '@/components/ViewTracker'
 import { SITE_URL } from '@/lib/site'
 import { TOTAL_SUPPLY, type TokenTransaction } from '@/lib/transparency'
 
@@ -178,6 +179,7 @@ export default function TransparencyPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col gap-8 sm:gap-10">
+      <ViewTracker event="transparency" />
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <header className="flex flex-col gap-2">
