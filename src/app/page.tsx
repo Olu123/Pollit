@@ -1,296 +1,208 @@
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingUp, Plus, Users, BarChart2, Trophy, Clock, Coins } from 'lucide-react'
+import type { Metadata } from 'next'
+import { ArrowLeft, Calendar, User, Share2, Users2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import PollCard from '@/components/PollCard'
-import HotTakeCard from '@/components/HotTakeCard'
+import type { Poll } from '@/lib/types'
+import VotingPanel from '@/components/VotingPanel'
+import StateBreakdown from '@/components/StateBreakdown'
+import FloatingShare from '@/components/FloatingShare'
+import CommunityGate from '@/components/CommunityGate'
+import PollActionsMenu from '@/components/PollActionsMenu'
 import { T } from '@/components/LanguageProvider'
-import SentryTestButton from '@/components/SentryTestButton'
-import type { Poll, PollCategory } from '@/lib/types'
-import type { StringKey } from '@/lib/i18n'
-
-export const revalidate = 30
+import { SITE_URL } from '@/lib/site'
+import { shareMessages, whatsappHref } from '@/lib/share'
 
 const POLL_SELECT = `
-  id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at,
+  id, question, category, created_by, expires_at, total_votes, is_hot_take,
+  is_community, community_name, community_code, community_password, created_at,
+  is_challenge, challenge_pool, challenge_status, challenge_distributed,
   profile:profiles!created_by ( id, username, avatar_url ),
   options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
 `
 
-const CATEGORIES = [
-  'All', 'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle',
-] as const
-type CategoryFilter = (typeof CATEGORIES)[number]
+export const revalidate = 60
 
-async function getPolls(category: CategoryFilter): Promise<Poll[]> {
-  let query = supabase
-    .from('polls')
-    .select(POLL_SELECT)
-    .eq('is_community', false)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(30)
-
-  if (category !== 'All') {
-    query = query.eq('category', category)
-  }
-
-  const { data, error } = await query
-  if (error) {
-    console.error('Polls fetch error:', error.message)
-    return []
-  }
-  return (data ?? []) as unknown as Poll[]
-}
-
-async function getActiveChallenges(): Promise<Poll[]> {
-  const { data, error } = await supabase
-    .from('polls')
-    .select(`
-      id, question, category, created_by, expires_at, total_votes,
-      is_challenge, challenge_pool, challenge_status,
-      options:poll_options ( id, vote_count )
-    `)
-    .eq('is_challenge', true)
-    .eq('challenge_status', 'active')
-    .is('deleted_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
-    .limit(10)
-
-  if (error) return []
-  return (data ?? []) as unknown as Poll[]
-}
-
-async function getHotTakes(): Promise<Poll[]> {
+async function getPoll(id: string): Promise<Poll | null> {
   const { data, error } = await supabase
     .from('polls')
     .select(POLL_SELECT)
-    .eq('is_hot_take', true)
-    .eq('is_community', false)
+    .eq('id', id)
     .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(10)
-
-  if (error) return []
-  return (data ?? []) as unknown as Poll[]
+    .single()
+  if (error || !data) return null
+  const poll = data as unknown as Poll
+  poll.options = [...poll.options].sort((a, b) => a.display_order - b.display_order)
+  return poll
 }
 
-async function getTotals(): Promise<{ pollCount: number; voteCount: number; userCount: number }> {
-  const [{ data: polls }, { count: userCount }] = await Promise.all([
-    supabase.from('polls').select('total_votes').is('deleted_at', null).limit(1000),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }),
-  ])
-
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const poll = await getPoll(id)
+  if (!poll || poll.is_community) return { title: 'Pollit' }
   return {
-    pollCount: polls?.length ?? 0,
-    voteCount: (polls ?? []).reduce((s, p) => s + (p.total_votes ?? 0), 0),
-    userCount: userCount ?? 0,
+    title: `${poll.question} — Pollit`,
+    openGraph: {
+      title: poll.question,
+      description: 'Vote now on Pollit 🗳️',
+      url: `${SITE_URL}/polls/${id}`,
+      images: [{ url: `/api/og/poll/${id}`, width: 1200, height: 630 }],
+    },
+    twitter: { card: 'summary_large_image', images: [`/api/og/poll/${id}`] },
   }
 }
 
-function fmt(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-}
-
-export default async function HomePage({
+export default async function PollPage({
+  params,
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ code?: string }>
 }) {
-  const { category } = await searchParams
-  const active: CategoryFilter =
-    CATEGORIES.includes(category as CategoryFilter) ? (category as CategoryFilter) : 'All'
+  const { id } = await params
+  const { code } = await searchParams
+  const poll = await getPoll(id)
+  if (!poll) notFound()
 
-  const [polls, totals, hotTakes, challenges] = await Promise.all([
-    getPolls(active), getTotals(), getHotTakes(), getActiveChallenges(),
-  ])
+  // Community poll gate — require the invite code.
+  if (poll.is_community && poll.community_code && code !== poll.community_code) {
+    return <CommunityGate pollId={poll.id} communityName={poll.community_name} />
+  }
+
+  const createdAt = new Date(poll.created_at).toLocaleDateString('en-NG', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const shareMsg =
+    poll.is_challenge
+      ? shareMessages.challenge(poll.id, poll.question, poll.challenge_pool, poll.total_votes)
+      : poll.is_community && poll.community_name && poll.community_code
+        ? shareMessages.community(poll.id, poll.question, poll.community_name, poll.community_code)
+        : poll.is_hot_take
+          ? shareMessages.hotTake(poll.id, poll.question)
+          : shareMessages.newPoll(poll.id, poll.question)
+
+  const url = `${SITE_URL}/polls/${poll.id}`
+  const links = {
+    whatsapp: whatsappHref(shareMsg),
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(poll.question)}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${poll.question} — ${url}`)}`,
+  }
 
   return (
-    <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
-      <SentryTestButton />
-      {/* Hero */}
-      <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
-            <span className="bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent">
-              <T k="home.heroHighlight" />
-            </span>{' '}
-            <span className="text-foreground"><T k="home.heroRest" /></span>
-          </h1>
-          <p className="mt-2 text-muted-foreground text-sm sm:text-base max-w-lg">
-            <T k="home.heroSubtitle" />
-          </p>
-        </div>
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      <FloatingShare href={links.whatsapp} />
+
+      {/* Back link + actions */}
+      <div className="flex items-center justify-between">
         <Link
-          href="/create"
-          className="inline-flex items-center justify-center gap-2 bg-primary text-white font-semibold text-sm px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all self-start sm:self-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          href="/"
+          className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
         >
-          <Plus size={16} strokeWidth={2.5} />
-          <T k="nav.create" />
+          <ArrowLeft size={15} />
+          <T k="vote.allPolls" />
         </Link>
-      </section>
-
-      {/* Token transparency trust badge */}
-      <Link
-        href="/transparency"
-        className="group flex items-center justify-between gap-3 rounded-xl bg-muted/60 hover:bg-muted px-4 py-2.5 transition-colors -mt-2"
-      >
-        <span className="text-xs sm:text-sm text-muted-foreground">
-          <T k="home.transparency" />
-        </span>
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary shrink-0">
-          <T k="home.transparencyView" />
-          <span className="transition-transform group-hover:translate-x-0.5">→</span>
-        </span>
-      </Link>
-
-      {/* Live stats bar */}
-      <div className="grid grid-cols-3 rounded-xl border border-border bg-card shadow-sm divide-x divide-border">
-        <Stat icon={<BarChart2 size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.pollCount)} label={<T k="home.statPolls" />} />
-        <Stat icon={<TrendingUp size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.voteCount)} label={<T k="home.statVotes" />} />
-        <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label={<T k="home.statUsers" />} />
+        <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} redirectHome />
       </div>
 
-      {/* 🏆 Active Challenges row */}
-      {challenges.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-black text-foreground flex items-center gap-2">
-              <T k="home.challenges" />
-            </h2>
-            <Link href="/challenges" className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
-              <T k="challenge.view" /> →
-            </Link>
+      {/* Poll card */}
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-8 shadow-sm flex flex-col gap-5 sm:gap-6">
+        {/* Community banner */}
+        {poll.is_community && (
+          <div className="flex items-center gap-2 bg-primary-light text-primary rounded-xl px-3 py-2.5">
+            <Users2 size={16} strokeWidth={2.5} className="shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold"><T k="community.badge" /></p>
+              {poll.community_name && (
+                <p className="text-sm font-bold text-foreground truncate">{poll.community_name}</p>
+              )}
+            </div>
           </div>
-          <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
-            {challenges.map((poll) => (
-              <HomeChallengeCard key={poll.id} poll={poll} />
-            ))}
-          </div>
-        </section>
-      )}
+        )}
 
-      {/* 🔥 Hot Takes row */}
-      {hotTakes.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-black text-foreground flex items-center gap-2">
-            <T k="home.hotTakes" />
-          </h2>
-          <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
-            {hotTakes.map((poll) => (
-              <HotTakeCard key={poll.id} poll={poll} />
-            ))}
+        {/* Meta */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+          {poll.profile?.username && (
+            <div className="flex items-center gap-1.5">
+              <User size={12} />
+              <span>@{poll.profile.username}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Calendar size={12} />
+            <span>{createdAt}</span>
           </div>
-        </section>
-      )}
+        </div>
 
-      {/* Category tabs */}
-      <div
-        role="tablist"
-        aria-label="Filter polls by category"
-        className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4 sm:mx-0 sm:px-0"
-      >
-        {CATEGORIES.map((cat) => {
-          const isActive = active === cat
-          const href = cat === 'All' ? '/' : `/?category=${cat}`
-          return (
-            <Link
-              key={cat}
-              href={href}
-              role="tab"
-              aria-selected={isActive}
-              className={`shrink-0 flex items-center text-sm font-semibold px-4 min-h-[44px] rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 ${
-                isActive
-                  ? 'bg-primary text-white shadow-md shadow-primary/30'
-                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-border'
-              }`}
-            >
-              <T k={`cat.${cat}` as StringKey} />
-            </Link>
-          )
-        })}
+        {/* Voting panel (client — handles real-time, auth, RPC) */}
+        <VotingPanel poll={poll} />
       </div>
 
-      {/* Grid */}
-      {polls.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {polls.map((poll, i) => (
-            <PollCard key={poll.id} poll={poll} index={i} />
-          ))}
+      {/* 📍 State-by-state breakdown */}
+      <StateBreakdown poll={poll} />
+
+      {/* Prominent share section */}
+      <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col items-center gap-3 text-center">
+        <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+          <Share2 size={16} className="text-primary" strokeWidth={2.5} />
+          <T k="detail.shareTitle" />
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center animate-fade-in">
-          <div className="w-20 h-20 rounded-2xl bg-primary-light flex items-center justify-center">
-            <BarChart2 size={36} className="text-primary" strokeWidth={2} />
-          </div>
-          <div>
-            <p className="font-bold text-lg text-foreground">
-              <T k={active === 'All' ? 'home.emptyTitle' : 'home.emptyTitleCat'} />
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              <T k="home.emptySub" />
-            </p>
-          </div>
-          <Link
-            href="/create"
-            className="mt-1 inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-6 min-h-[44px] rounded-full hover:bg-primary-dark active:scale-95 transition-all"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            <T k="home.emptyCta" />
-          </Link>
+        <p className="text-xs text-muted-foreground"><T k="detail.shareSub" /></p>
+        <div className="flex items-center gap-2.5">
+          <ShareButton href={links.whatsapp} label="Share on WhatsApp"    cls="bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20"><WhatsAppIcon /></ShareButton>
+          <ShareButton href={links.telegram} label="Share on Telegram"    cls="bg-[#229ED9]/10 text-[#229ED9] hover:bg-[#229ED9]/20"><TelegramIcon /></ShareButton>
+          <ShareButton href={links.facebook} label="Share on Facebook"    cls="bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2]/20"><FacebookIcon /></ShareButton>
+          <ShareButton href={links.twitter}  label="Share on Twitter / X" cls="bg-foreground/8 text-foreground hover:bg-foreground/15"><TwitterXIcon /></ShareButton>
         </div>
-      )}
+      </div>
     </main>
   )
 }
 
-function timeLeftShort(expiresAt: string): string {
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff <= 0) return 'Ended'
-  const d = Math.floor(diff / 86_400_000)
-  const h = Math.floor((diff % 86_400_000) / 3_600_000)
-  if (d > 0) return `${d}d ${h}h`
-  const m = Math.floor((diff % 3_600_000) / 60_000)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function HomeChallengeCard({ poll }: { poll: Poll }) {
+function ShareButton({ href, label, cls, children }: { href: string; label: string; cls: string; children: React.ReactNode }) {
   return (
-    <Link
-      href={`/polls/${poll.id}`}
-      className="snap-start shrink-0 w-72 rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 to-white p-4 flex flex-col gap-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className={`flex items-center justify-center w-12 h-12 rounded-full transition-colors duration-150 active:scale-95 ${cls}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500 text-white">
-          <Trophy size={12} strokeWidth={2.5} /> <T k="challenge.badge" />
-        </span>
-        <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
-          <Clock size={11} strokeWidth={2.5} />{timeLeftShort(poll.expires_at)}
-        </span>
-      </div>
-      <h3 className="font-bold text-foreground text-[15px] leading-snug line-clamp-2 min-h-[40px]">{poll.question}</h3>
-      <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-amber-200">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-          <Coins size={13} strokeWidth={2.5} />
-          {poll.challenge_pool.toLocaleString()} <T k="challenge.tokens" />
-        </span>
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-          <Users size={12} strokeWidth={2.5} />{poll.total_votes.toLocaleString()}
-        </span>
-      </div>
-    </Link>
+      {children}
+    </a>
   )
 }
 
-function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: React.ReactNode }) {
+function WhatsAppIcon() {
   return (
-    <div className="flex flex-col items-center justify-center py-3 px-2 gap-0.5 text-center">
-      <div className="flex items-center gap-1.5">
-        {icon}
-        <span className="text-lg font-black text-foreground tabular-nums leading-none">{value}</span>
-      </div>
-      <span className="text-[11px] sm:text-xs text-muted-foreground">{label}</span>
-    </div>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.858L.054 23.447a.75.75 0 0 0 .916.977l5.7-1.494A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.96 9.96 0 0 1-5.071-1.38l-.364-.214-3.763.987.999-3.667-.236-.375A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+    </svg>
+  )
+}
+function TelegramIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+    </svg>
+  )
+}
+function FacebookIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+    </svg>
+  )
+}
+function TwitterXIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
   )
 }
