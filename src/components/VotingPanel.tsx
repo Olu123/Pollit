@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw } from 'lucide-react'
+import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw, Trophy } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import type { Poll, PollOption, PollComment } from '@/lib/types'
 import { useAuth } from './AuthProvider'
@@ -80,6 +80,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [comments, setComments]    = useState<PollComment[]>([])
   const [revealing, setRevealing]  = useState(false)
   const [insight, setInsight]      = useState('')
+  const [challengeParticipants, setChallengeParticipants] = useState<number>(poll.total_votes)
+  const [justJoinedChallenge, setJustJoinedChallenge] = useState(false)
 
   // Edit window + vote-change window
   const [nowTs, setNowTs]          = useState(() => Date.now())
@@ -194,6 +196,11 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     return () => { supabase.removeChannel(channel) }
   }, [poll.id, loadComments])
 
+  // Keep challenge participant count in sync with total_votes
+  useEffect(() => {
+    setChallengeParticipants(poll.total_votes)
+  }, [poll.total_votes])
+
   // Apply the vote to local state and compute the post-vote insight.
   function applyVoted(optionId: string) {
     const newOptions = poll.options.map((o) =>
@@ -262,7 +269,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       return
     }
 
-    const { error } = await supabase.rpc('cast_vote', {
+    const rpcName = poll.is_challenge ? 'join_challenge' : 'cast_vote'
+    const { error } = await supabase.rpc(rpcName, {
       p_poll_id:   poll.id,
       p_option_id: optionId,
       p_comment:   text,
@@ -275,6 +283,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           ? t('vote.already')
           : error.message.includes('hourly_vote_limit_reached')
           ? "You're voting too fast! Please slow down."
+          : error.message.includes('challenge_ended')
+          ? 'This challenge has ended.'
           : error.message
       )
       setVoting(false)
@@ -282,8 +292,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     }
 
     setVoting(false)
-    if (text) loadComments()
-    runResultMoment(optionId)
+    if (poll.is_challenge) {
+      setChallengeParticipants((p) => p + 1)
+      setJustJoinedChallenge(true)
+      applyVoted(optionId)
+    } else {
+      if (text) loadComments()
+      runResultMoment(optionId)
+    }
   }
 
   // ── Edit window ─────────────────────────────────────────────
@@ -389,7 +405,16 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
-      {/* Edit window banner */}
+      {/* Challenge banner */}
+      {poll.is_challenge && (
+        <ChallengeBanner
+          pool={poll.challenge_pool}
+          participants={challengeParticipants}
+          expiresAt={poll.expires_at}
+          status={poll.challenge_status}
+        />
+      )}
+
       {editOpen && !editing && (
         <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3">
           <span className="text-sm font-semibold">
@@ -548,8 +573,34 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
+      {/* Challenge post-join celebration */}
+      {poll.is_challenge && justJoinedChallenge && (
+        <div className="bg-gradient-to-br from-amber-500 to-yellow-400 text-white rounded-xl p-5 flex flex-col gap-3 animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <Trophy size={20} strokeWidth={2.5} />
+            <p className="font-black text-lg">You joined the challenge!</p>
+          </div>
+          <p className="text-sm font-semibold">
+            You&apos;re participant #{challengeParticipants.toLocaleString()}
+          </p>
+          <p className="text-sm">
+            Current estimated reward:{' '}
+            <strong>~{challengeParticipants > 0 ? Math.floor(poll.challenge_pool / challengeParticipants).toLocaleString() : poll.challenge_pool.toLocaleString()} tokens</strong>
+          </p>
+          <p className="text-xs opacity-90">Share to bring more participants and keep the challenge alive!</p>
+          <a
+            href={whatsappHref(shareMessages.challenge(poll.id, poll.question, poll.challenge_pool, challengeParticipants))}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 bg-white text-amber-700 text-sm font-bold px-5 min-h-[44px] rounded-full hover:bg-amber-50 active:scale-95 transition-all"
+          >
+            Share on WhatsApp 🏆
+          </a>
+        </div>
+      )}
+
       {/* Surprise insight + share */}
-      {votedOptionId && insight && (
+      {!poll.is_challenge && votedOptionId && insight && (
         <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-xl p-5 flex flex-col gap-3 animate-fade-in-up">
           <p className="text-base font-bold leading-snug">{insight}</p>
           <a
@@ -734,6 +785,62 @@ function CommentsFeed({ comments }: { comments: PollComment[] }) {
         })}
       </div>
       )}
+    </div>
+  )
+}
+
+// ── Challenge banner ──────────────────────────────────────────
+
+function ChallengeBanner({
+  pool, participants, expiresAt, status,
+}: {
+  pool: number
+  participants: number
+  expiresAt: string
+  status: string
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const msLeft = new Date(expiresAt).getTime() - now
+  const ended = msLeft <= 0 || status === 'completed'
+  const d = Math.floor(msLeft / 86_400_000)
+  const h = Math.floor((msLeft % 86_400_000) / 3_600_000)
+  const m = Math.floor((msLeft % 3_600_000) / 60_000)
+  const s = Math.floor((msLeft % 60_000) / 1000)
+  const countdown = ended
+    ? 'Challenge ended'
+    : d > 0 ? `${d}d ${h}h ${m}m left` : `${h}h ${m}m ${s}s left`
+
+  const estimated = participants > 0 ? Math.floor(pool / participants) : pool
+
+  return (
+    <div className="rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 p-4 flex flex-col gap-2.5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Trophy size={18} className="text-white" strokeWidth={2.5} />
+          <span className="text-xs font-black text-white tracking-wide uppercase">Challenge</span>
+        </div>
+        <span className="text-xs font-semibold text-amber-900 bg-white/40 px-2 py-0.5 rounded-full">
+          {countdown}
+        </span>
+      </div>
+      <p className="text-white font-black text-xl">
+        {pool.toLocaleString()} <span className="text-sm font-semibold">token pool</span>
+      </p>
+      <p className="text-amber-900 text-xs font-semibold">Share in the prize pool by participating!</p>
+      <div className="flex items-center justify-between gap-2 bg-white/30 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-1.5 text-amber-900 text-xs font-semibold">
+          <Users size={13} />
+          {participants.toLocaleString()} {participants === 1 ? 'person' : 'people'} joined
+        </div>
+        <div className="text-amber-900 text-xs font-bold">
+          ~{estimated.toLocaleString()} tokens each
+        </div>
+      </div>
     </div>
   )
 }
