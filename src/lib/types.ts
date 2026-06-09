@@ -21,6 +21,10 @@ export interface Profile {
   referred_by: string | null
   referral_count: number
   is_admin: boolean
+  first_vote_at: string | null
+  first_poll_at: string | null
+  flag_count: number
+  last_flag_at: string | null
   created_at: string
   updated_at: string
 }
@@ -45,6 +49,11 @@ export interface Poll {
   community_name: string | null
   community_code: string | null
   community_password: string | null
+  is_challenge: boolean
+  challenge_pool: number
+  challenge_status: string
+  challenge_distributed: boolean
+  is_flagged: boolean
   deleted_at: string | null
   created_at: string
   profile: Profile | null

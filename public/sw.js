@@ -1,4 +1,4 @@
-// Pollit service worker — offline caching + background vote sync.
+// WePollit service worker — offline caching + background vote sync.
 const CACHE = 'pollit-v1'
 const PRECACHE_URLS = ['/', '/login', '/leaderboard']
 

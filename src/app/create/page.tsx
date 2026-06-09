@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Loader2, Users2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, Users2, Trophy } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
 import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
+import { getAccountAgeDays, getAccountAgeHours, getAccountPermissions } from '@/lib/accountAge'
+import { analytics } from '@/lib/analytics'
 import { Turnstile } from '@marsidev/react-turnstile'
+import Link from 'next/link'
 
 const HOT_TAKE_MIN_TOKENS = 100
 
@@ -56,11 +59,15 @@ export default function CreatePollPage() {
   const [communityName, setCommunityName] = useState('')
   const [communityCode, setCommunityCode] = useState('')
   const [communityPassword, setCommunityPassword] = useState('')
+  const [isChallenge, setChallenge] = useState(false)
+  const [challengePool, setChallengePool] = useState('')
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
+  const isAdmin = !!profile?.is_admin
+  const poolNum = Math.max(0, Math.floor(Number(challengePool) || 0))
 
   function toggleCommunity() {
     setCommunity((v) => {
@@ -113,6 +120,7 @@ export default function CreatePollPage() {
     }
 
     setBusy(true)
+    const makeChallenge = isAdmin && isChallenge && !isCommunity
     const expiresAt = new Date(Date.now() + expiryDays * 86_400_000).toISOString()
 
     const { data: pollId, error: rpcError } = await supabase.rpc('create_poll', {
@@ -120,22 +128,32 @@ export default function CreatePollPage() {
       p_category:    category,
       p_options:     trimmed,
       p_expires_at:  expiresAt,
-      p_is_hot_take: canHotTake && isHotTake && !isCommunity,
+      p_is_hot_take: canHotTake && isHotTake && !isCommunity && !makeChallenge,
       p_is_community: isCommunity,
       p_community_name: isCommunity ? communityName.trim() || null : null,
       p_community_code: isCommunity ? communityCode : null,
       p_community_password: isCommunity ? communityPassword.trim() || null : null,
+      p_is_challenge: makeChallenge,
+      p_challenge_pool: makeChallenge ? poolNum : 0,
     })
 
     if (rpcError) {
       setError(
-        rpcError.message.includes('daily_poll_limit_reached')
-          ? "You've reached your daily limit of 10 polls. Come back tomorrow!"
+        rpcError.message.includes('account_too_new_to_create_polls')
+          ? 'Your account must be at least 1 hour old before you can create polls.'
+          : rpcError.message.includes('daily_poll_limit_reached')
+          ? "You've reached your daily limit of polls. Come back tomorrow!"
           : rpcError.message
       )
       setBusy(false)
       return
     }
+    analytics.pollCreated(
+      category,
+      canHotTake && isHotTake && !isCommunity && !makeChallenge,
+      isCommunity,
+      makeChallenge,
+    )
     if (isCommunity && communityCode) {
       router.push(`/polls/${pollId}?code=${communityCode}`)
     } else {
@@ -148,12 +166,24 @@ export default function CreatePollPage() {
 
   if (loading || !user) return null
 
+  // Account-age gate — mirrors the create_poll RPC. Admins are exempt.
+  if (profile && !profile.is_admin) {
+    const perms = getAccountPermissions(
+      getAccountAgeDays(profile.created_at),
+      profile.points,
+      getAccountAgeHours(profile.created_at),
+    )
+    if (!perms.canCreatePoll) {
+      return <NewAccountGate createdAt={profile.created_at} />
+    }
+  }
+
   return (
     <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">{t('create.title')}</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
-          {t('create.subtitlePre')} <span className="text-primary font-semibold">+30 tokens</span> {t('create.subtitlePost')}
+          {t('create.subtitlePre')} <span className="text-primary font-semibold">+20 tokens</span> {t('create.subtitlePost')}
         </p>
       </div>
 
@@ -219,6 +249,59 @@ export default function CreatePollPage() {
               <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isHotTake ? 'translate-x-5' : ''}`} />
             </span>
           </button>
+        )}
+
+        {/* Challenge toggle — admin only */}
+        {isAdmin && (
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setChallenge((v) => !v)}
+              aria-pressed={isChallenge}
+              className={`flex items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all ${
+                isChallenge ? 'border-amber-500 bg-amber-50' : 'border-border hover:border-amber-500/40'
+              }`}
+            >
+              <div>
+                <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Trophy size={15} className="text-amber-500" /> {t('challenge.toggle')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('challenge.toggleSub')}</p>
+              </div>
+              <span className={`w-11 h-6 rounded-full p-0.5 shrink-0 transition-colors ${isChallenge ? 'bg-amber-500' : 'bg-muted'}`}>
+                <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${isChallenge ? 'translate-x-5' : ''}`} />
+              </span>
+            </button>
+
+            {isChallenge && (
+              <div className="flex flex-col gap-2 pl-1">
+                <label className="block text-sm font-semibold text-foreground">{t('challenge.poolLabel')}</label>
+                <div className="flex items-center gap-2 border border-border rounded-xl px-4 min-h-[44px] focus-within:ring-2 focus-within:ring-amber-400">
+                  <Trophy size={15} className="text-amber-500 shrink-0" />
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={challengePool}
+                    onChange={(e) => setChallengePool(e.target.value)}
+                    placeholder="e.g. 5000"
+                    className="flex-1 bg-transparent text-base outline-none py-2.5 tabular-nums"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">{t('challenge.tokens')}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{t('challenge.poolHint')}</p>
+                {poolNum > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <p className="text-xs text-amber-700">{t('challenge.estReward')}</p>
+                    <p className="text-lg font-black text-amber-700 tabular-nums">
+                      ≈ {Math.floor(poolNum / 50).toLocaleString()} {t('challenge.tokens')}
+                    </p>
+                    <p className="text-xs text-amber-700/80">{t('challenge.estRewardSub')} · if 50 join</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Community poll toggle */}
@@ -381,11 +464,53 @@ export default function CreatePollPage() {
             {busy ? (
               <><Loader2 size={17} className="animate-spin" /> {t('create.publishing')}</>
             ) : (
-              `${t('create.publish')} (+30 tokens)`
+              `${t('create.publish')} (+20 tokens)`
             )}
           </button>
         </div>
       </form>
+    </main>
+  )
+}
+
+function NewAccountGate({ createdAt }: { createdAt: string }) {
+  const unlockAt = new Date(new Date(createdAt).getTime() + 3_600_000)
+  const fmt = (d: Date) =>
+    d.toLocaleString('en-NG', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: 'numeric', minute: '2-digit',
+    })
+  return (
+    <main className="max-w-md mx-auto px-4 sm:px-6 py-10 sm:py-16">
+      <div className="rounded-2xl border border-border bg-card shadow-sm p-6 sm:p-8 flex flex-col items-center text-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl">⏳</div>
+        <h1 className="text-xl sm:text-2xl font-black text-foreground">Almost ready to create polls!</h1>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Your account needs to be at least 1 hour old before you can create polls.
+          This helps us keep WePollit genuine and free from spam.
+        </p>
+
+        <div className="w-full bg-muted/60 rounded-xl px-4 py-3 flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Account created</span>
+            <span className="font-semibold text-foreground">{fmt(new Date(createdAt))}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">You can create polls</span>
+            <span className="font-semibold text-primary">{fmt(unlockAt)}</span>
+          </div>
+        </div>
+
+        <p className="text-sm text-foreground/80">
+          In the meantime, explore polls and vote to earn tokens 🗳️
+        </p>
+        <Link
+          href="/"
+          className="w-full bg-primary text-white font-bold text-base py-3.5 rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all min-h-[52px] flex items-center justify-center"
+        >
+          Explore &amp; Vote
+        </Link>
+      </div>
     </main>
   )
 }

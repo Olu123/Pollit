@@ -8,6 +8,7 @@ import {
   Mail, Phone, Globe,
 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { analytics } from '@/lib/analytics'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { Turnstile } from '@marsidev/react-turnstile'
@@ -55,7 +56,7 @@ export default function LoginPage() {
   function switchTab(t: Tab) { setTab(t); reset() }
 
   // ── Social ─────────────────────────────────────────────────────
-  async function handleOAuth(provider: 'google' | 'facebook' | 'twitter') {
+  async function handleOAuth(provider: 'google' | 'facebook' | 'x') {
     setBusy(true); reset()
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -70,6 +71,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (error) { setError(error.message); return }
+    analytics.userSignedIn('email')
     router.push('/')
   }
 
@@ -85,6 +87,7 @@ export default function LoginPage() {
     setBusy(false)
     if (error) { setError(error.message); return }
     if (data.session) {
+      analytics.userSignedUp('email')
       router.push('/profile')
     } else {
       setInfo('Check your email to confirm your account, then sign in.')
@@ -137,6 +140,7 @@ export default function LoginPage() {
     })
     setBusy(false)
     if (error) { setError(error.message); return }
+    analytics.userSignedIn('phone')
     router.push('/')
   }
 
@@ -156,7 +160,7 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-2xl font-black">
               Welcome to{' '}
-              <span className="text-foreground">Poll</span><span className="text-[#DC2626]">+it</span>
+              <span className="text-foreground font-black">We</span><span className="text-muted-foreground font-black">+</span><span className="text-foreground font-black">Poll</span><span className="text-muted-foreground font-black">+</span><span className="text-[#DC2626] font-black">it</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Sign in to vote and create polls</p>
           </div>
@@ -205,7 +209,7 @@ export default function LoginPage() {
                 <FacebookIcon /> Continue with Facebook
               </button>
               <button
-                onClick={() => handleOAuth('twitter')}
+                onClick={() => handleOAuth('x')}
                 disabled={busy}
                 className="w-full flex items-center justify-center gap-3 bg-black text-white rounded-xl px-4 min-h-[52px] text-sm font-semibold hover:bg-zinc-800 active:scale-[0.99] transition-all disabled:opacity-60"
               >
@@ -479,7 +483,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          By continuing you agree to Pollit's Terms of Service.
+          By continuing you agree to WePollit's Terms of Service.
         </p>
       </div>
     </main>

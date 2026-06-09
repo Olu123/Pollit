@@ -39,7 +39,7 @@ function emailHtml(d: { name: string; email: string; username: string; subject: 
       <p style="margin:0;white-space:pre-wrap">${esc(d.message)}</p>
       <hr style="border:none;border-top:1px solid #e4e4e7;margin:16px 0" />
       <p style="margin:0;color:#71717a;font-size:12px">Reply directly to ${esc(d.email)} to respond to this user.</p>
-      <p style="margin:8px 0 0;color:#71717a;font-size:12px">pollit-ng.vercel.app</p>
+      <p style="margin:8px 0 0;color:#71717a;font-size:12px">wepollit.com</p>
     </div>
   </div>`
 }
@@ -99,10 +99,10 @@ export async function POST(request: Request) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
       const sendResult = await resend.emails.send({
-        from: 'Pollit <onboarding@resend.dev>',
+        from: 'WePollit <onboarding@resend.dev>',
         to: NOTIFY_TO,
         replyTo: email,
-        subject: `[Pollit Contact] ${subject} — from ${name}`,
+        subject: `[WePollit Contact] ${subject} — from ${name}`,
         html: emailHtml({
           name, email, username: username ?? '', subject, message,
           date: new Date().toUTCString(),

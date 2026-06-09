@@ -5,21 +5,23 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, BarChart2, Flag, Mail,
-  Coins, Megaphone, ArrowLeft, Menu, Shield, Loader2,
+  Coins, Megaphone, ArrowLeft, Menu, Shield, Loader2, Siren,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 
 const NAV = [
   { href: '/admin',               icon: LayoutDashboard, label: 'Overview' },
   { href: '/admin/users',         icon: Users,           label: 'Users' },
   { href: '/admin/polls',         icon: BarChart2,       label: 'Polls' },
+  { href: '/admin/flags',         icon: Siren,           label: 'Flags' },
   { href: '/admin/reports',       icon: Flag,            label: 'Reports' },
   { href: '/admin/messages',      icon: Mail,            label: 'Messages' },
   { href: '/admin/tokens',        icon: Coins,           label: 'Tokens' },
   { href: '/admin/announcements', icon: Megaphone,       label: 'Announcements' },
 ]
 
-function SidebarContent({ pathname, onClose }: { pathname: string; onClose: () => void }) {
+function SidebarContent({ pathname, onClose, flagCount }: { pathname: string; onClose: () => void; flagCount: number }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-4 border-b border-border shrink-0">
@@ -44,7 +46,14 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose: () =
               }`}
             >
               <Icon size={15} strokeWidth={2} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {label === 'Flags' && flagCount > 0 && (
+                <span className={`text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ${
+                  active ? 'bg-white text-primary' : 'bg-[#DC2626] text-white'
+                }`}>
+                  {flagCount > 99 ? '99+' : flagCount}
+                </span>
+              )}
             </Link>
           )
         })}
@@ -57,7 +66,7 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose: () =
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <ArrowLeft size={15} />
-          Back to Pollit
+          Back to WePollit
         </Link>
       </div>
     </div>
@@ -69,10 +78,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router   = useRouter()
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [flagCount, setFlagCount] = useState(0)
 
   useEffect(() => {
-    if (!loading && (!user || !profile?.is_admin)) router.replace('/')
+    if (loading) return
+    if (!user) { router.replace('/login'); return }
+    // Wait for the profile to load before judging admin status. AuthProvider
+    // flips `loading` to false as soon as the session resolves, but the
+    // profile is fetched in a later effect — without this guard the brief
+    // "user set, profile still null" window would bounce admins to home.
+    if (profile && !profile.is_admin) router.replace('/')
   }, [loading, user, profile, router])
+
+  useEffect(() => {
+    if (!profile?.is_admin) return
+    let active = true
+    supabase
+      .from('suspicious_flags')
+      .select('id', { count: 'exact', head: true })
+      .eq('resolved', false)
+      .then(({ count }) => { if (active) setFlagCount(count ?? 0) })
+    return () => { active = false }
+  }, [profile?.is_admin, pathname])
 
   if (loading || !profile?.is_admin) {
     return (
@@ -88,7 +115,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-border bg-card sticky top-16 h-[calc(100vh-64px)]">
-        <SidebarContent pathname={pathname} onClose={() => {}} />
+        <SidebarContent pathname={pathname} onClose={() => {}} flagCount={flagCount} />
       </aside>
 
       {/* Mobile overlay */}
@@ -105,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           drawerOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarContent pathname={pathname} onClose={() => setDrawerOpen(false)} />
+        <SidebarContent pathname={pathname} onClose={() => setDrawerOpen(false)} flagCount={flagCount} />
       </aside>
 
       {/* Content area */}

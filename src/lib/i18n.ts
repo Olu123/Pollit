@@ -14,6 +14,7 @@ export const STRINGS = {
   'nav.logout':      { en: 'Sign out',    pid: 'Comot' },
   'nav.pulse':       { en: 'Pulse',       pid: 'Naija Pulse' },
   'nav.invite':      { en: 'Invite & Earn 🎁', pid: 'Invite & Earn 🎁' },
+  'nav.challenges':  { en: 'Challenges 🏆', pid: 'Challenges 🏆' },
   'nav.signedInAs':  { en: 'Signed in as', pid: 'You enter as' },
 
   // ── Result moment / state breakdown / community / card ──────
@@ -34,7 +35,7 @@ export const STRINGS = {
   'card.regenerate':    { en: 'Regenerate', pid: 'Do am again' },
   'card.deciding':      { en: 'Still deciding... 🤔', pid: 'Still dey decide... 🤔' },
   'invite.title':       { en: 'Invite friends, earn tokens', pid: 'Invite friends, collect tokens' },
-  'invite.sub':         { en: 'Earn 100 tokens for every friend who joins and votes.', pid: 'Collect 100 tokens for every friend wey join and vote.' },
+  'invite.sub':         { en: 'Earn 30 tokens for every friend who joins and votes.', pid: 'Collect 30 tokens for every friend wey join and vote.' },
   'invite.yourLink':    { en: 'Your referral link', pid: 'Your referral link' },
   'invite.copy':        { en: 'Copy', pid: 'Copy' },
   'invite.copied':      { en: 'Copied!', pid: 'Copied!' },
@@ -122,7 +123,7 @@ export const STRINGS = {
   'create.step3':        { en: 'Settings', pid: 'Settings' },
 
   // ── Login ───────────────────────────────────────────────────
-  'login.welcome':   { en: 'Welcome to Pollit', pid: 'Welcome Enter Pollit' },
+  'login.welcome':   { en: 'Welcome to WePollit', pid: 'Welcome Enter WePollit' },
   'login.welcomePrefix': { en: 'Welcome to', pid: 'Welcome Enter' },
   'login.resend':    { en: 'Resend / change number', pid: 'Send again / change number' },
   'login.subtitle':  { en: 'Sign in to vote and create polls', pid: 'Come talk your own — vote and make poll' },
@@ -138,7 +139,7 @@ export const STRINGS = {
   'login.phoneLabel': { en: 'Phone number', pid: 'Your phone number' },
   'login.otpLabel':  { en: 'Enter OTP', pid: 'Enter the Code' },
   'login.back':      { en: '← Back', pid: '← Go back' },
-  'login.terms':     { en: "By continuing you agree to Pollit's Terms of Service.", pid: 'If you continue, you don gree to Pollit Terms of Service.' },
+  'login.terms':     { en: "By continuing you agree to WePollit's Terms of Service.", pid: 'If you continue, you don gree to WePollit Terms of Service.' },
 
   // ── Leaderboard ─────────────────────────────────────────────
   'lb.title':        { en: 'Leaderboard', pid: 'Top Ranking' },
@@ -157,7 +158,7 @@ export const STRINGS = {
   'lb.browse':       { en: 'Browse Polls', pid: 'See Polls' },
 
   // ── Profile ─────────────────────────────────────────────────
-  'profile.manage':   { en: 'Manage your Pollit account', pid: 'Manage your Pollit account' },
+  'profile.manage':   { en: 'Manage your WePollit account', pid: 'Manage your WePollit account' },
   'profile.details':  { en: 'Profile details', pid: 'My Info' },
   'profile.edit':     { en: 'Edit', pid: 'Change My Info' },
   'profile.cancel':   { en: 'Cancel', pid: 'Leave am' },
@@ -205,8 +206,40 @@ export const STRINGS = {
   'pulse.emptyTitle':   { en: 'No polls yet this week', pid: 'No poll this week yet' },
   'pulse.emptySub':     { en: 'Create the first one and set the agenda.', pid: 'Make the first one set the agenda.' },
 
+  // ── Challenges ──────────────────────────────────────────────
+  'challenge.title':       { en: '🏆 Challenges', pid: '🏆 Challenges' },
+  'challenge.subtitle':    { en: 'Join a challenge, cast your vote, and share the token pool.', pid: 'Join challenge, cast your vote, and share the token pool.' },
+  'challenge.active':      { en: 'Active Challenges', pid: 'Challenges Wey Dey On' },
+  'challenge.completed':   { en: 'Completed Challenges', pid: 'Challenges Wey Don Finish' },
+  'challenge.pool':        { en: 'Token pool', pid: 'Token pool' },
+  'challenge.participants':{ en: 'participants', pid: 'people don join' },
+  'challenge.join':        { en: 'Join Challenge', pid: 'Join Challenge' },
+  'challenge.joined':      { en: "You're in! 🎉", pid: 'You don enter! 🎉' },
+  'challenge.joinedSub':   { en: 'Your vote is counted. Rewards are shared when the challenge ends.', pid: 'Dem don count your vote. We go share rewards when the challenge end.' },
+  'challenge.badge':       { en: '🏆 Challenge', pid: '🏆 Challenge' },
+  'challenge.banner':      { en: 'This is a Challenge! Join to compete for a share of the', pid: 'Na Challenge be dis! Join to fight for share of the' },
+  'challenge.tokens':      { en: 'tokens', pid: 'tokens' },
+  'challenge.estReward':   { en: 'Estimated reward', pid: 'Estimated reward' },
+  'challenge.estRewardSub':{ en: 'per participant (split equally at the end)', pid: 'per person (split equally for the end)' },
+  'challenge.share':       { en: 'Share this Challenge on WhatsApp', pid: 'Share this Challenge for WhatsApp' },
+  'challenge.none':        { en: 'No challenges right now', pid: 'No challenge dey now' },
+  'challenge.noneSub':     { en: 'Check back soon — new challenges drop regularly.', pid: 'Come back soon — new challenges dey drop well well.' },
+  'challenge.ended':       { en: 'Ended', pid: 'Don End' },
+  'challenge.view':        { en: 'View & Join', pid: 'See & Join' },
+  'challenge.toggle':      { en: 'Make this a Challenge? 🏆', pid: 'Na Challenge be dis? 🏆' },
+  'challenge.toggleSub':   { en: 'Fund a token pool that voters share. Admins only.', pid: 'Fund token pool wey voters go share. Admin only.' },
+  'challenge.poolLabel':   { en: 'Token pool', pid: 'Token pool' },
+  'challenge.poolHint':    { en: 'Total tokens to share among all participants.', pid: 'Total tokens to share among everybody wey join.' },
+  'home.challenges':       { en: '🏆 Active Challenges', pid: '🏆 Active Challenges' },
+  'home.transparency':     { en: '🔍 Full token transparency — every transaction is public', pid: '🔍 Full token transparency — every transaction dey open for everybody' },
+  'home.transparencyView': { en: 'View ledger', pid: 'See ledger' },
+
+  // ── Rate-limit errors ───────────────────────────────────────
+  'error.hourlyVoteLimit': { en: "You've hit the hourly vote limit (100/hour). Try again later.", pid: 'You don reach the vote limit for this hour (100/hour). Try again later.' },
+  'error.dailyPollLimit':  { en: "You've hit the daily poll limit (10/day). Try again tomorrow.", pid: 'You don reach the poll limit for today (10/day). Try again tomorrow.' },
+
   // ── PWA install ─────────────────────────────────────────────
-  'pwa.install':     { en: 'Install Pollit', pid: 'Install Pollit' },
+  'pwa.install':     { en: 'Install WePollit', pid: 'Install WePollit' },
   'pwa.installSub':  { en: 'Add to your home screen for quick access.', pid: 'Add am to your home screen make e easy.' },
   'pwa.installBtn':  { en: 'Install', pid: 'Install' },
 } satisfies Record<string, Entry>

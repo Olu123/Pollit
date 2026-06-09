@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+<<<<<<< HEAD
 import { Plus, Trash2, Loader2, Users2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
@@ -39,6 +40,56 @@ const CATEGORY_STYLES: Record<PollCategory, string> = {
   Entertainment: 'bg-violet-100 text-violet-700',
   Business:      'bg-amber-100 text-amber-700',
   Lifestyle:     'bg-pink-100 text-pink-700',
+=======
+import type { Poll } from '@/lib/types'
+import VotingPanel from '@/components/VotingPanel'
+import PollViewTracker from '@/components/PollViewTracker'
+import StateBreakdown from '@/components/StateBreakdown'
+import FloatingShare from '@/components/FloatingShare'
+import CommunityGate from '@/components/CommunityGate'
+import PollActionsMenu from '@/components/PollActionsMenu'
+import { T } from '@/components/LanguageProvider'
+import { SITE_URL } from '@/lib/site'
+import { shareMessages, whatsappHref } from '@/lib/share'
+
+const POLL_SELECT = `
+  id, question, category, created_by, expires_at, total_votes, is_hot_take,
+  is_community, community_name, community_code, community_password,
+  is_challenge, challenge_pool, challenge_status, challenge_distributed, created_at,
+  profile:profiles!created_by ( id, username, avatar_url ),
+  options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
+`
+
+export const revalidate = 60
+
+async function getPoll(id: string): Promise<Poll | null> {
+  const { data, error } = await supabase
+    .from('polls')
+    .select(POLL_SELECT)
+    .eq('id', id)
+    .is('deleted_at', null)
+    .single()
+  if (error || !data) return null
+  const poll = data as unknown as Poll
+  poll.options = [...poll.options].sort((a, b) => a.display_order - b.display_order)
+  return poll
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const poll = await getPoll(id)
+  if (!poll || poll.is_community) return { title: 'WePollit' }
+  return {
+    title: `${poll.question} — WePollit`,
+    openGraph: {
+      title: poll.question,
+      description: 'Vote now on WePollit 🗳️',
+      url: `${SITE_URL}/polls/${id}`,
+      images: [{ url: `/api/og/poll/${id}`, width: 1200, height: 630 }],
+    },
+    twitter: { card: 'summary_large_image', images: [`/api/og/poll/${id}`] },
+  }
+>>>>>>> a92848aae97fffbf087a2d2a781cf6996f0b547a
 }
 
 const STEP_KEYS: StringKey[] = ['create.step1', 'create.step2', 'create.step3']
@@ -164,12 +215,29 @@ export default function CreatePollPage() {
   if (loading || !user) return null
 
   return (
+<<<<<<< HEAD
     <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-black text-foreground">{t('create.title')}</h1>
         <p className="text-muted-foreground text-sm mt-1.5">
           {t('create.subtitlePre')} <span className="text-primary font-semibold">+30 tokens</span> {t('create.subtitlePost')}
         </p>
+=======
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      <PollViewTracker pollId={poll.id} category={poll.category} isChallenge={poll.is_challenge} />
+      <FloatingShare href={links.whatsapp} />
+
+      {/* Back link + actions */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 -ml-1 px-1 min-h-[44px] text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        >
+          <ArrowLeft size={15} />
+          <T k="vote.allPolls" />
+        </Link>
+        <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} redirectHome />
+>>>>>>> a92848aae97fffbf087a2d2a781cf6996f0b547a
       </div>
 
       {/* Step indicator */}

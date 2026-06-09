@@ -93,7 +93,7 @@ export default function PwaRegister() {
           <Download size={18} className="text-white" strokeWidth={2.5} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-foreground leading-tight">Install Pollit</p>
+          <p className="text-sm font-bold text-foreground leading-tight">Install WePollit</p>
           {isIOS && !installEvt ? (
             <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
               Tap <Share size={11} className="inline" /> then &ldquo;Add to Home Screen&rdquo;

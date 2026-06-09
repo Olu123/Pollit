@@ -12,6 +12,10 @@ interface AdminPoll {
   is_hot_take: boolean
   is_pinned: boolean
   is_community: boolean
+  is_challenge: boolean
+  challenge_pool: number
+  challenge_status: string
+  challenge_distributed: boolean
   deleted_at: string | null
   created_at: string
   expires_at: string
@@ -38,7 +42,8 @@ export default function AdminPollsPage() {
       .from('polls')
       .select(`
         id, question, category, total_votes, is_hot_take, is_pinned,
-        is_community, deleted_at, created_at, expires_at,
+        is_community, is_challenge, challenge_pool, challenge_status, challenge_distributed,
+        deleted_at, created_at, expires_at,
         profile:profiles!created_by ( username )
       `)
       .order('created_at', { ascending: false })
@@ -141,6 +146,8 @@ export default function AdminPollsPage() {
                           {p.is_hot_take && <Badge color="orange">Hot Take</Badge>}
                           {p.is_pinned   && <Badge color="blue">Pinned</Badge>}
                           {p.is_community && <Badge color="purple">Community</Badge>}
+                          {p.is_challenge && <Badge color="amber">🏆 {p.challenge_pool.toLocaleString()}</Badge>}
+                          {p.is_challenge && p.challenge_distributed && <Badge color="green">Paid out</Badge>}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden sm:table-cell">
@@ -165,6 +172,11 @@ export default function AdminPollsPage() {
                               <Btn disabled={isBusy} onClick={() => rpc('admin_toggle_pin', { p_poll_id: p.id }, p.is_pinned ? 'Poll unpinned.' : 'Poll pinned.', p.id)}>
                                 {p.is_pinned ? 'Unpin' : 'Pin'}
                               </Btn>
+                              {p.is_challenge && !p.challenge_distributed && (
+                                <Btn disabled={isBusy} color="green" onClick={() => rpc('distribute_challenge_tokens', { p_poll_id: p.id }, 'Challenge pool distributed.', p.id)}>
+                                  Distribute 🏆
+                                </Btn>
+                              )}
                               <Btn disabled={isBusy} color="red" onClick={() => rpc('admin_delete_poll', { p_poll_id: p.id }, 'Poll deleted.', p.id)}>Delete</Btn>
                             </>
                           )}
@@ -192,6 +204,7 @@ export default function AdminPollsPage() {
 function Badge({ color, children }: { color: string; children: React.ReactNode }) {
   const cls: Record<string, string> = {
     orange: 'bg-orange-100 text-orange-700',
+    amber:  'bg-amber-100 text-amber-700',
     blue:   'bg-blue-100 text-blue-700',
     purple: 'bg-purple-100 text-purple-700',
     red:    'bg-red-100 text-red-700',
