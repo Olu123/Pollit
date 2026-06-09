@@ -77,12 +77,12 @@ export default async function PollPage({
 
   const shareMsg =
     poll.is_challenge
-    shareMessages.challenge(poll.id, poll.question, poll.challenge_pool)      : poll.is_community && poll.community_name && poll.community_code
+      ? shareMessages.challenge(poll.id, poll.question, poll.challenge_pool)
+      : poll.is_community && poll.community_name && poll.community_code
         ? shareMessages.community(poll.id, poll.question, poll.community_name, poll.community_code)
         : poll.is_hot_take
           ? shareMessages.hotTake(poll.id, poll.question)
           : shareMessages.newPoll(poll.id, poll.question)
-
   const url = `${SITE_URL}/polls/${poll.id}`
   const links = {
     whatsapp: whatsappHref(shareMsg),
