@@ -3,44 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-<<<<<<< HEAD
-import { Plus, Trash2, Loader2, Users2 } from 'lucide-react'
-import { useAuth } from '@/components/AuthProvider'
-import { useLanguage } from '@/components/LanguageProvider'
-import type { PollCategory } from '@/lib/types'
-import type { StringKey } from '@/lib/i18n'
-import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
-import { Turnstile } from '@marsidev/react-turnstile'
-import { Trophy } from 'lucide-react'
 
-const HOT_TAKE_MIN_TOKENS = 100
-
-function genCommunityCode() {
-  const letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ'
-  const alnum = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  const pick = (set: string, n: number) =>
-    Array.from({ length: n }, () => set[Math.floor(Math.random() * set.length)]).join('')
-  return `${pick(letters, 3)}-${pick(alnum, 3)}`
-}
-
-const CATEGORIES: PollCategory[] = [
-  'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle',
-]
-
-const EXPIRY_OPTIONS = [
-  { label: '24 hours', days: 1 },
-  { label: '3 days',   days: 3 },
-  { label: '7 days',   days: 7 },
-  { label: '30 days',  days: 30 },
-]
-
-const CATEGORY_STYLES: Record<PollCategory, string> = {
-  Politics:      'bg-red-100 text-red-700',
-  Sports:        'bg-blue-100 text-blue-700',
-  Entertainment: 'bg-violet-100 text-violet-700',
-  Business:      'bg-amber-100 text-amber-700',
-  Lifestyle:     'bg-pink-100 text-pink-700',
-=======
 import type { Poll } from '@/lib/types'
 import VotingPanel from '@/components/VotingPanel'
 import PollViewTracker from '@/components/PollViewTracker'
@@ -89,7 +52,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     },
     twitter: { card: 'summary_large_image', images: [`/api/og/poll/${id}`] },
   }
->>>>>>> a92848aae97fffbf087a2d2a781cf6996f0b547a
 }
 
 const STEP_KEYS: StringKey[] = ['create.step1', 'create.step2', 'create.step3']
@@ -215,14 +177,7 @@ export default function CreatePollPage() {
   if (loading || !user) return null
 
   return (
-<<<<<<< HEAD
-    <main className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-foreground">{t('create.title')}</h1>
-        <p className="text-muted-foreground text-sm mt-1.5">
-          {t('create.subtitlePre')} <span className="text-primary font-semibold">+30 tokens</span> {t('create.subtitlePost')}
-        </p>
-=======
+
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
       <PollViewTracker pollId={poll.id} category={poll.category} isChallenge={poll.is_challenge} />
       <FloatingShare href={links.whatsapp} />
@@ -237,7 +192,6 @@ export default function CreatePollPage() {
           <T k="vote.allPolls" />
         </Link>
         <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} redirectHome />
->>>>>>> a92848aae97fffbf087a2d2a781cf6996f0b547a
       </div>
 
       {/* Step indicator */}
