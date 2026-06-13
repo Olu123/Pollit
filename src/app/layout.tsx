@@ -76,7 +76,7 @@ export const metadata: Metadata = {
   // inherited by child routes, so a root canonical would point every page at
   // the homepage. Each page sets its own canonical instead (homepage below).
   verification: {
-    google: 'YOUR_GOOGLE_VERIFICATION_CODE',
+    google: 'SEvRJuZa6G3J8Bg423gRwCUPQ5uXXwI-h6Ai6rncVPU',
   },
 }
 
