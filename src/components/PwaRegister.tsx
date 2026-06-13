@@ -4,13 +4,26 @@ import { useEffect, useState, useCallback } from 'react'
 import { Download, X, Share } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getPendingVotes, removePendingVote } from '@/lib/voteQueue'
+import { useLanguage } from './LanguageProvider'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BIPEvent = any
 
 const DISMISS_KEY = 'pollit_install_dismissed'
 
+// The early-capture script in the root layout stashes the deferred prompt here.
+function getStashedPrompt(): BIPEvent | null {
+  if (typeof window === 'undefined') return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).__wpInstallPrompt ?? null
+}
+function clearStashedPrompt() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof window !== 'undefined') (window as any).__wpInstallPrompt = null
+}
+
 export default function PwaRegister() {
+  const { t } = useLanguage()
   const [installEvt, setInstallEvt] = useState<BIPEvent | null>(null)
   const [showBanner, setShowBanner] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
@@ -53,21 +66,47 @@ export default function PwaRegister() {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
     setIsIOS(ios)
 
-    if (!standalone && !dismissed) {
-      // iOS has no beforeinstallprompt — show the manual hint banner.
-      if (ios) setShowBanner(true)
+    if (standalone || dismissed) return
+
+    // Already-captured prompt (fired before React mounted) — show the button now.
+    const stashed = getStashedPrompt()
+    if (stashed) {
+      setInstallEvt(stashed)
+      setShowBanner(true)
+    } else if (ios) {
+      // iOS has no beforeinstallprompt — show the manual "Add to Home Screen" hint.
+      setShowBanner(true)
     }
 
+    // Future prompts: both the native event (in case the script missed it) and
+    // the custom event dispatched by the early-capture script.
+    const onAvailable = () => {
+      const evt = getStashedPrompt()
+      if (evt) {
+        setInstallEvt(evt)
+        setShowBanner(true)
+      }
+    }
     const onBIP = (e: BIPEvent) => {
       e.preventDefault()
       setInstallEvt(e)
-      if (!standalone && !dismissed) setShowBanner(true)
+      setShowBanner(true)
     }
+    const onInstalled = () => {
+      setInstallEvt(null)
+      setShowBanner(false)
+    }
+    window.addEventListener('wp-install-available', onAvailable)
     window.addEventListener('beforeinstallprompt', onBIP)
+    window.addEventListener('wp-install-done', onInstalled)
+    window.addEventListener('appinstalled', onInstalled)
 
     return () => {
       window.removeEventListener('online', onOnline)
+      window.removeEventListener('wp-install-available', onAvailable)
       window.removeEventListener('beforeinstallprompt', onBIP)
+      window.removeEventListener('wp-install-done', onInstalled)
+      window.removeEventListener('appinstalled', onInstalled)
     }
   }, [flushVotes])
 
@@ -77,14 +116,20 @@ export default function PwaRegister() {
   }
 
   async function install() {
-    if (!installEvt) return
-    installEvt.prompt()
-    await installEvt.userChoice
+    const evt = installEvt ?? getStashedPrompt()
+    if (!evt) return
+    try {
+      evt.prompt()
+      await evt.userChoice
+    } catch { /* prompt already used or dismissed */ }
+    clearStashedPrompt()
     setInstallEvt(null)
     dismiss()
   }
 
   if (!showBanner) return null
+
+  const canInstall = !isIOS && !!installEvt
 
   return (
     <div className="fixed bottom-4 inset-x-4 z-[60] mx-auto max-w-md md:hidden">
@@ -93,21 +138,21 @@ export default function PwaRegister() {
           <Download size={18} className="text-white" strokeWidth={2.5} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-foreground leading-tight">Install WePollit</p>
+          <p className="text-sm font-bold text-foreground leading-tight">{t('pwa.install')}</p>
           {isIOS && !installEvt ? (
             <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
               Tap <Share size={11} className="inline" /> then &ldquo;Add to Home Screen&rdquo;
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground mt-0.5">Add to your home screen for quick access.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('pwa.installSub')}</p>
           )}
         </div>
-        {!isIOS && installEvt && (
+        {canInstall && (
           <button
             onClick={install}
             className="bg-primary text-white text-sm font-semibold px-4 min-h-[40px] rounded-full hover:bg-primary-dark active:scale-95 transition-all shrink-0"
           >
-            Install
+            {t('pwa.installBtn')}
           </button>
         )}
         <button

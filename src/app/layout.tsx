@@ -33,6 +33,30 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
+      <head>
+        {/*
+          Capture `beforeinstallprompt` as early as possible. On mobile Chrome this
+          event fires during initial load — often before React hydrates and attaches
+          its listener — so without this the deferred prompt is lost and the install
+          button never appears. We stash the event on `window` and notify React.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              window.__wpInstallPrompt = window.__wpInstallPrompt || null;
+              window.addEventListener('beforeinstallprompt', function (e) {
+                e.preventDefault();
+                window.__wpInstallPrompt = e;
+                window.dispatchEvent(new Event('wp-install-available'));
+              });
+              window.addEventListener('appinstalled', function () {
+                window.__wpInstallPrompt = null;
+                window.dispatchEvent(new Event('wp-install-done'));
+              });
+            })();`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col text-foreground antialiased font-sans">
         {/* Thin red accent bar at the very top */}
         <div className="h-1 bg-[#DC2626] w-full shrink-0" />

@@ -12,6 +12,7 @@ import { useToast } from './ToastProvider'
 import ReportButton from './ReportButton'
 import { enqueueVote } from '@/lib/voteQueue'
 import { NIGERIAN_STATES } from '@/lib/states'
+import { lgasForState } from '@/lib/lgas'
 import { getInsight } from '@/lib/insights'
 import { shareMessages, whatsappHref } from '@/lib/share'
 import { analytics } from '@/lib/analytics'
@@ -76,6 +77,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [selectedId, setSelected]  = useState<string | null>(null)
   const [comment, setComment]      = useState('')
   const [voteState, setVoteState]  = useState('')
+  const [voteLga, setVoteLga]      = useState('')
   const [voting, setVoting]        = useState(false)
   const [voteError, setVoteError]  = useState('')
   const [comments, setComments]    = useState<PollComment[]>([])
@@ -250,6 +252,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     const optionId = selectedId
     const text = sanitizeComment(comment) || null
     const stateVal = voteState || null
+    const lgaVal = (voteState && voteLga) ? voteLga : null
     setVoting(true)
     setVoteError('')
 
@@ -274,6 +277,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       p_option_id: optionId,
       p_comment:   text,
       p_state:     stateVal,
+      p_lga:       lgaVal,
     })
 
     if (error) {
@@ -518,13 +522,28 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
                 <MapPin size={15} className="text-muted-foreground shrink-0" />
                 <select
                   value={voteState}
-                  onChange={(e) => setVoteState(e.target.value)}
+                  onChange={(e) => { setVoteState(e.target.value); setVoteLga('') }}
                   className="flex-1 bg-transparent text-base outline-none py-2.5"
                 >
-                  <option value="">Your state (optional)</option>
+                  <option value="">{t('vote.statePlaceholder')}</option>
                   {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+
+              {/* LGA (optional) — only once a state is chosen; powers the LGA breakdown */}
+              {voteState && (
+                <div className="flex items-center gap-2 border border-border rounded-xl px-3 min-h-[44px] focus-within:ring-2 focus-within:ring-primary">
+                  <MapPin size={15} className="text-muted-foreground shrink-0" />
+                  <select
+                    value={voteLga}
+                    onChange={(e) => setVoteLga(e.target.value)}
+                    className="flex-1 bg-transparent text-base outline-none py-2.5"
+                  >
+                    <option value="">{t('vote.lgaPlaceholder')}</option>
+                    {lgasForState(voteState).map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <textarea
                   value={comment}

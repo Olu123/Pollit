@@ -83,6 +83,7 @@ create table if not exists public.votes (
 -- For existing databases: add the optional comment + state columns.
 alter table public.votes add column if not exists comment text;
 alter table public.votes add column if not exists state   text;
+alter table public.votes add column if not exists lga     text;
 alter table public.votes add column if not exists changed_at          timestamptz;
 alter table public.votes add column if not exists original_option_id  uuid references public.poll_options(id);
 alter table public.votes drop constraint if exists votes_comment_len;
@@ -97,6 +98,7 @@ create index if not exists polls_expires_at_idx  on public.polls(expires_at);
 create index if not exists options_poll_id_idx   on public.poll_options(poll_id);
 create index if not exists votes_poll_id_idx     on public.votes(poll_id);
 create index if not exists votes_user_id_idx     on public.votes(user_id);
+create index if not exists votes_lga_idx          on public.votes(lga) where lga is not null;
 
 -- ── Row Level Security ────────────────────────────────────────
 
@@ -1599,12 +1601,16 @@ declare v_uid uuid := auth.uid(); begin
 end; $$;
 grant execute on function public.admin_clear_poll_flag(uuid) to authenticated;
 
--- ── cast_vote (v4 — account age stamp + behavioural check) ────
+-- ── cast_vote (v5 — LGA breakdown: p_lga) ─────────────────────
+-- Drop the 4-arg signature so the 5-arg version is unambiguous to PostgREST
+-- (a call that omits p_lga would otherwise match both overloads).
+drop function if exists public.cast_vote(uuid, uuid, text, text);
 create or replace function public.cast_vote(
   p_poll_id   uuid,
   p_option_id uuid,
   p_comment   text default null,
-  p_state     text default null
+  p_state     text default null,
+  p_lga       text default null
 )
 returns jsonb
 language plpgsql security definer set search_path = public
@@ -1613,6 +1619,7 @@ declare
   v_uid     uuid := auth.uid();
   v_comment text := nullif(btrim(p_comment), '');
   v_state   text := nullif(btrim(p_state), '');
+  v_lga     text := nullif(btrim(p_lga), '');
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
   if v_comment is not null and char_length(v_comment) > 280 then
@@ -1624,8 +1631,8 @@ begin
     raise exception 'hourly_vote_limit_reached';
   end if;
 
-  insert into votes (poll_id, option_id, user_id, comment, state)
-  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+  insert into votes (poll_id, option_id, user_id, comment, state, lga)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state, v_lga);
 
   update poll_options set vote_count = vote_count + 1 where id = p_option_id;
   update polls         set total_votes = total_votes + 1 where id = p_poll_id;
@@ -1741,12 +1748,14 @@ begin
 end;
 $$;
 
--- ── join_challenge (v3 — account age stamp + behavioural check) ─
+-- ── join_challenge (v4 — LGA breakdown: p_lga) ────────────────
+drop function if exists public.join_challenge(uuid, uuid, text, text);
 create or replace function public.join_challenge(
   p_poll_id   uuid,
   p_option_id uuid,
   p_comment   text default null,
-  p_state     text default null
+  p_state     text default null,
+  p_lga       text default null
 )
 returns jsonb
 language plpgsql security definer set search_path = public
@@ -1755,6 +1764,7 @@ declare
   v_uid     uuid := auth.uid();
   v_comment text := nullif(btrim(p_comment), '');
   v_state   text := nullif(btrim(p_state), '');
+  v_lga     text := nullif(btrim(p_lga), '');
   v_poll    polls%rowtype;
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
@@ -1776,8 +1786,8 @@ begin
     raise exception 'hourly_vote_limit_reached';
   end if;
 
-  insert into votes (poll_id, option_id, user_id, comment, state)
-  values (p_poll_id, p_option_id, v_uid, v_comment, v_state);
+  insert into votes (poll_id, option_id, user_id, comment, state, lga)
+  values (p_poll_id, p_option_id, v_uid, v_comment, v_state, v_lga);
 
   insert into challenge_participants (poll_id, user_id, option_id)
   values (p_poll_id, v_uid, p_option_id);
@@ -1801,4 +1811,4 @@ exception
   when unique_violation then raise exception 'already_voted';
 end;
 $$;
-grant execute on function public.join_challenge(uuid, uuid, text, text) to authenticated;
+grant execute on function public.join_challenge(uuid, uuid, text, text, text) to authenticated;
