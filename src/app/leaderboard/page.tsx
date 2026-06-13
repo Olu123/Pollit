@@ -5,6 +5,11 @@ import { T } from '@/components/LanguageProvider'
 import ViewTracker from '@/components/ViewTracker'
 import type { StringKey } from '@/lib/i18n'
 
+export const metadata = {
+  title: 'Leaderboard — Top WePollit Users',
+  description: "See Nigeria's most active WePollit users. Top voters, poll creators and token earners on Nigeria's opinion platform.",
+}
+
 export const revalidate = 300 // re-fetch at most every 5 minutes
 
 // ── Types ─────────────────────────────────────────────────────

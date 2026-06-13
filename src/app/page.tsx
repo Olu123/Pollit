@@ -6,6 +6,11 @@ import HotTakeCard from '@/components/HotTakeCard'
 import { T } from '@/components/LanguageProvider'
 import type { Poll, PollCategory } from '@/lib/types'
 import type { StringKey } from '@/lib/i18n'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+}
 
 export const revalidate = 30
 

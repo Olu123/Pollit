@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Community Guidelines — WePollit',
-  description: 'How we keep WePollit honest, safe and valuable for all Nigerians.',
+  description: "WePollit community guidelines. How we keep Nigeria's opinion platform honest, safe and valuable for all users.",
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

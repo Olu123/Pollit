@@ -7,6 +7,11 @@ import type { StringKey } from '@/lib/i18n'
 import type { PollCategory } from '@/lib/types'
 import { SITE_DOMAIN as SITE } from '@/lib/site'
 
+export const metadata = {
+  title: 'Nigerian Pulse — Weekly Opinion Digest',
+  description: 'The WePollit Nigerian Pulse — see what Nigeria is thinking this week. Top polls, trending opinions and community stats.',
+}
+
 export const revalidate = 3600 // refresh hourly
 
 const CATEGORIES: PollCategory[] = ['Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle']

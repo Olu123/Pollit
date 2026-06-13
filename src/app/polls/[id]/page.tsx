@@ -39,12 +39,14 @@ async function getPoll(id: string): Promise<Poll | null> {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const poll = await getPoll(id)
-  if (!poll || poll.is_community) return { title: 'Pollit' }
+  if (!poll || poll.is_community) return { title: 'WePollit' }
   return {
-    title: `${poll.question} — Pollit`,
+    title: poll.question,
+    description: `Vote now on WePollit 🗳️ — ${poll.question}`,
+    alternates: { canonical: `${SITE_URL}/polls/${id}` },
     openGraph: {
       title: poll.question,
-      description: 'Vote now on Pollit 🗳️',
+      description: 'Vote now on WePollit 🗳️',
       url: `${SITE_URL}/polls/${id}`,
       images: [{ url: `/api/og/poll/${id}`, width: 1200, height: 630 }],
     },
@@ -84,6 +86,28 @@ export default async function PollPage({
           ? shareMessages.hotTake(poll.id, poll.question)
           : shareMessages.newPoll(poll.id, poll.question)
   const url = `${SITE_URL}/polls/${poll.id}`
+
+  // Structured data — a poll maps cleanly onto schema.org Question/Answer.
+  // Skip community polls (they're gated and excluded from indexing).
+  const pollJsonLd = poll.is_community
+    ? null
+    : {
+        '@context': 'https://schema.org',
+        '@type': 'Question',
+        name: poll.question,
+        datePublished: poll.created_at,
+        author: {
+          '@type': 'Person',
+          name: poll.profile?.username || 'WePollit User',
+        },
+        answerCount: poll.total_votes,
+        suggestedAnswer: poll.options.map((opt) => ({
+          '@type': 'Answer',
+          text: opt.text,
+          upvoteCount: opt.vote_count,
+        })),
+      }
+
   const links = {
     whatsapp: whatsappHref(shareMsg),
     telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(poll.question)}`,
@@ -93,6 +117,12 @@ export default async function PollPage({
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      {pollJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(pollJsonLd) }}
+        />
+      )}
       <FloatingShare href={links.whatsapp} />
 
       {/* Back link + actions */}
