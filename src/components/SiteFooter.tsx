@@ -2,13 +2,17 @@
 
 import Link from 'next/link'
 import { useOnboarding } from './OnboardingProvider'
+import NewsletterSignup from './NewsletterSignup'
 
 export default function SiteFooter() {
   const { openOnboarding } = useOnboarding()
   const year = new Date().getFullYear()
 
   return (
-    <footer className="border-t border-border py-6 px-4">
+    <footer className="border-t border-border py-8 px-4 flex flex-col gap-6">
+      <div className="max-w-6xl mx-auto w-full">
+        <NewsletterSignup />
+      </div>
       <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span>&copy; {year} WePollit</span>
         <span aria-hidden>·</span>

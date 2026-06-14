@@ -18,6 +18,7 @@ export interface Profile {
   birth_day: number | null
   bio: string | null
   state_of_origin: string | null
+  newsletter_opt_in: boolean
   referred_by: string | null
   referral_count: number
   is_admin: boolean

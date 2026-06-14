@@ -66,6 +66,7 @@ export default function ProfilePage() {
   const [birthDay, setDay]        = useState('')
   const [phone, setPhone]         = useState('')
   const [bio, setBio]             = useState('')
+  const [newsletter, setNewsletter] = useState(false)
 
   // Read-only / derived
   const [stats, setStats]   = useState<Stats>({ points: 0, pollsCreated: 0, votesCast: 0 })
@@ -102,6 +103,7 @@ export default function ProfilePage() {
       setDay(profile.birth_day ? String(profile.birth_day) : '')
       setPhone(profile.phone ?? '')
       setBio(profile.bio ?? '')
+      setNewsletter(!!profile.newsletter_opt_in)
       setStats({
         points:       profile.points ?? 0,
         pollsCreated: polls.count ?? 0,
@@ -137,6 +139,7 @@ if (!cleanUsername) {
         birth_day:   birthDay ? Number(birthDay) : null,
         phone:       phone.trim() || null,
         bio:         sanitizeText(bio).slice(0, 160) || null,
+        newsletter_opt_in: newsletter,
         updated_at:  new Date().toISOString(),
       })
       .eq('id', user!.id)
@@ -149,6 +152,21 @@ if (!cleanUsername) {
       )
       setSaving(false)
       return
+    }
+
+    // Sync the Resend newsletter audience with the saved preference (best-effort).
+    if (user?.email) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        await fetch('/api/newsletter/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ email: user.email, subscribe: newsletter }),
+        })
+      } catch { /* non-fatal */ }
     }
 
     setSaving(false)
@@ -313,6 +331,22 @@ if (!cleanUsername) {
           />
           <p className="text-xs text-muted-foreground mt-1 text-right tabular-nums">{bio.length}/{MAX_BIO}</p>
         </Field>
+
+        {/* Newsletter opt-in */}
+        <label className="flex items-start gap-3 border border-border rounded-xl px-4 py-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={newsletter}
+            onChange={(e) => setNewsletter(e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC2626]"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-foreground">📬 Weekly Nigerian Pulse</span>
+            <span className="block text-xs text-muted-foreground mt-0.5">
+              Top polls and the most surprising results, emailed every Monday. Unsubscribe anytime.
+            </span>
+          </span>
+        </label>
 
         </fieldset>
 

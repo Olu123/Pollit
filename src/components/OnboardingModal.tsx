@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { BarChart2, Search, Vote, Flame, AlertTriangle } from 'lucide-react'
 import { useLanguage } from './LanguageProvider'
+import { useAuth } from './AuthProvider'
+import { supabase } from '@/lib/supabase'
 
 const GUIDELINES = [
   'Vote honestly — your opinion is your power',
@@ -16,12 +18,32 @@ const GUIDELINES = [
 
 export default function OnboardingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { lang } = useLanguage()
+  const { user } = useAuth()
   const en = lang === 'en'
   const [slide, setSlide] = useState(0)
+  const [newsletter, setNewsletter] = useState(true)
 
   if (!open) return null
 
-  const next = () => (slide < 3 ? setSlide(slide + 1) : onClose())
+  // On finishing onboarding, subscribe the user to the weekly Pulse if opted in.
+  async function finish() {
+    if (newsletter && user?.email) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        await fetch('/api/newsletter/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ email: user.email }),
+        })
+      } catch { /* non-fatal — they can opt in later from their profile */ }
+    }
+    onClose()
+  }
+
+  const next = () => (slide < 3 ? setSlide(slide + 1) : finish())
 
   return (
     <div className="fixed inset-0 z-[95] bg-gray-950/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-4">
@@ -109,6 +131,21 @@ export default function OnboardingModal({ open, onClose }: { open: boolean; onCl
                   ? 'You can update your profile at any time from your Profile page.'
                   : 'You fit update your profile anytime from your Profile page.'}
               </p>
+
+              {/* Newsletter opt-in */}
+              <label className="flex items-start gap-3 bg-primary-light/50 border border-primary/20 rounded-xl px-4 py-3 mt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newsletter}
+                  onChange={(e) => setNewsletter(e.target.checked)}
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC2626]"
+                />
+                <span className="text-sm text-foreground/85 leading-snug">
+                  {en
+                    ? '📬 Email me the weekly Nigerian Pulse — top polls and the most surprising results, every Monday.'
+                    : '📬 Send me the weekly Naija Pulse — top polls and surprising results, every Monday.'}
+                </span>
+              </label>
             </div>
           )}
         </div>

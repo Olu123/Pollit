@@ -17,6 +17,7 @@ create table if not exists public.profiles (
   birth_month integer,
   birth_day   integer,
   bio         text,
+  newsletter_opt_in boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -32,6 +33,7 @@ alter table public.profiles add column if not exists state_of_origin text;
 alter table public.profiles add column if not exists referred_by     uuid references public.profiles(id);
 alter table public.profiles add column if not exists referral_count  integer default 0;
 alter table public.profiles add column if not exists is_admin        boolean default false;
+alter table public.profiles add column if not exists newsletter_opt_in boolean not null default false;
 
 create table if not exists public.polls (
   id          uuid default gen_random_uuid() primary key,
