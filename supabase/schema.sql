@@ -1750,6 +1750,121 @@ begin
 end;
 $$;
 
+-- ── create_poll (v5 — hash community_password with pgcrypto) ──
+create extension if not exists pgcrypto;
+
+create or replace function public.create_poll(
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null,
+  p_is_challenge   boolean default false,
+  p_challenge_pool integer default 0
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid              uuid := auth.uid();
+  v_poll_id          uuid;
+  v_idx              int;
+  v_is_challenge      boolean := coalesce(p_is_challenge, false);
+  v_account_age_hours numeric;
+  v_polls_today       integer;
+  v_max_polls         integer;
+  v_password          text := nullif(btrim(p_community_password), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
+
+  -- Account age gate — admins are exempt (they create challenges etc.).
+  select extract(epoch from (now() - created_at)) / 3600
+    into v_account_age_hours
+  from profiles where id = v_uid;
+
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    if v_account_age_hours < 1 then
+      raise exception 'account_too_new_to_create_polls';
+    end if;
+
+    -- Dynamic daily limit: under 7 days (168h) old → 2/day, otherwise 5/day.
+    v_max_polls := case when v_account_age_hours < 168 then 2 else 5 end;
+
+    select count(*) into v_polls_today
+    from polls
+    where created_by = v_uid
+      and created_at > now() - interval '24 hours'
+      and deleted_at is null;
+
+    if v_polls_today >= v_max_polls then
+      raise exception 'daily_poll_limit_reached';
+    end if;
+  end if;
+
+  -- Only admins may create challenges.
+  if v_is_challenge and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password,
+                     is_challenge, challenge_pool, challenge_status)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          case when v_password is null then null else crypt(v_password, gen_salt('bf')) end,
+          v_is_challenge,
+          case when v_is_challenge then greatest(coalesce(p_challenge_pool, 0), 0) else 0 end,
+          'active')
+  returning id into v_poll_id;
+
+  for v_idx in 1 .. array_length(p_options, 1) loop
+    insert into poll_options (poll_id, text, display_order)
+    values (v_poll_id, p_options[v_idx], v_idx);
+  end loop;
+
+  update profiles
+     set points = points + 20,
+         first_poll_at = coalesce(first_poll_at, now()),
+         updated_at = now()
+   where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 20, 'Poll creation reward', 'poll_created', v_poll_id
+  from profiles p where p.id = v_uid;
+
+  perform public.check_suspicious_behaviour(v_uid, v_poll_id, 'poll_created');
+
+  return v_poll_id;
+end;
+$$;
+
+-- Verifies a plaintext password against the bcrypt hash stored in
+-- polls.community_password. Runs security definer so callers only ever
+-- get a boolean back, never the hash itself. Returns true when no
+-- password is set (nothing to verify).
+create or replace function public.verify_community_password(p_poll_id uuid, p_password text)
+returns boolean
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_hash text;
+begin
+  select community_password into v_hash from polls where id = p_poll_id;
+  if v_hash is null then return true; end if;
+  return v_hash = crypt(coalesce(p_password, ''), v_hash);
+end;
+$$;
+grant execute on function public.verify_community_password(uuid, text) to anon, authenticated;
+
 -- ── join_challenge (v4 — LGA breakdown: p_lga) ────────────────
 drop function if exists public.join_challenge(uuid, uuid, text, text);
 create or replace function public.join_challenge(
@@ -1814,3 +1929,14 @@ exception
 end;
 $$;
 grant execute on function public.join_challenge(uuid, uuid, text, text, text) to authenticated;
+
+-- Homepage stats bar totals — a single SQL aggregate instead of pulling
+-- rows client-side to sum them.
+create or replace function public.platform_totals()
+returns table(poll_count bigint, vote_count bigint)
+language sql stable security definer set search_path = public as $$
+  select count(*)::bigint, coalesce(sum(total_votes), 0)::bigint
+  from polls
+  where deleted_at is null;
+$$;
+grant execute on function public.platform_totals() to anon, authenticated;

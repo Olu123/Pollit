@@ -29,6 +29,7 @@ export const STRINGS = {
   'community.go':       { en: 'Go to poll', pid: 'Enter poll', hau: 'Je zuwa zaɓe', yor: 'Lọ sí ìdìbò', ibo: 'Gaa na ntuli aka' },
   'community.gateTitle':{ en: 'This is a Community Poll', pid: 'Na Community Poll be dis', hau: 'Wannan Zaɓen Al’umma ne', yor: 'Ìdìbò Àdúgbò ni èyí', ibo: 'Nke a bụ Ntuli Aka Obodo' },
   'community.gateSub':  { en: 'Enter the invite code to view and vote.', pid: 'Enter the invite code to see and vote.', hau: 'Shigar da lambar gayyata don gani da zaɓe.', yor: 'Tẹ kóòdù ìpè náà kí o lè wò á kí o sì dìbò.', ibo: 'Tinye koodu nkpọọ oku iji hụ ma votu.' },
+  'community.enterPassword': { en: 'Password', pid: 'Password', hau: 'Kalmar sirri', yor: 'Ọ̀rọ̀ìgbaniwọlé', ibo: 'Okwuntughe' },
   'card.generate':      { en: 'Generate My Nigeria Card 🇳🇬', pid: 'Generate My Naija Card 🇳🇬', hau: 'Ƙirƙiri Katina ta Najeriya 🇳🇬', yor: 'Ṣe Káàdì Nàìjíríà Mi 🇳🇬', ibo: 'Mepụta Kaadị Naijiria M 🇳🇬' },
   'card.download':      { en: 'Download', pid: 'Download', hau: 'Sauke', yor: 'Gbasilẹ', ibo: 'Budata' },
   'card.shareCard':     { en: 'Share', pid: 'Share', hau: 'Raba', yor: 'Pín', ibo: 'Kesaa' },

@@ -5,16 +5,16 @@ import { SITE_URL } from './site'
 
 // Sender + audience are read from env at call time so missing config degrades
 // gracefully (the routes skip the Resend step rather than crashing).
-export const NEWSLETTER_FROM = 'WePollit <onboarding@resend.dev>'
+export const NEWSLETTER_FROM = process.env.NEWSLETTER_FROM_ADDRESS || 'WePollit <onboarding@resend.dev>'
 
 export function audienceId(): string | null {
   return process.env.RESEND_AUDIENCE_ID || null
 }
 
-// Secret for signing unsubscribe links. Falls back to the Resend key so links
-// still work when a dedicated NEWSLETTER_SECRET hasn't been set.
 function secret(): string {
-  return process.env.NEWSLETTER_SECRET || process.env.RESEND_API_KEY || 'wepollit-newsletter'
+  const s = process.env.NEWSLETTER_SECRET
+  if (!s) throw new Error('NEWSLETTER_SECRET env var is not set')
+  return s
 }
 
 function normalize(email: string): string {

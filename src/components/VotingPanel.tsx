@@ -3,20 +3,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Users, Clock, CheckCircle2, Loader2, Star, MessageCircle, MapPin, Pencil, Lock, RefreshCw, Trophy } from 'lucide-react'
+import { Users, Clock, CheckCircle2, Loader2, Star, Trophy } from 'lucide-react'
 import confetti from 'canvas-confetti'
-import type { Poll, PollOption, PollComment } from '@/lib/types'
+import type { Poll, PollOption } from '@/lib/types'
 import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
 import { useToast } from './ToastProvider'
-import ReportButton from './ReportButton'
 import { enqueueVote } from '@/lib/voteQueue'
-import { NIGERIAN_STATES } from '@/lib/states'
-import { lgasForState } from '@/lib/lgas'
 import { getInsight } from '@/lib/insights'
 import { shareMessages, whatsappHref } from '@/lib/share'
 import { analytics } from '@/lib/analytics'
 import { sanitizeComment } from '@/lib/sanitize'
+import { useVoteStatus } from '@/lib/voting/useVoteStatus'
+import { useCommentsFeed } from '@/lib/voting/useCommentsFeed'
+import ResultsBars from './voting/ResultsBars'
+import ChallengeBanner from './voting/ChallengeBanner'
+import CommentsFeed from './voting/CommentsFeed'
+import VoteOptionsForm from './voting/VoteOptionsForm'
+import EditableQuestion from './voting/EditableQuestion'
 
 function timeRemaining(expiresAt: string) {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -29,31 +33,8 @@ function timeRemaining(expiresAt: string) {
   return `${m}m left`
 }
 
-function timeAgo(iso: string) {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60) return 'just now'
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  if (d < 7) return `${d}d ago`
-  return `${Math.floor(d / 7)}w ago`
-}
-
 function fmtVotes(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-}
-
-const AVATAR_PALETTE = [
-  '#16a34a', '#2563eb', '#7c3aed', '#dc2626',
-  '#ea580c', '#0891b2', '#be185d', '#0d9488',
-]
-
-function avatarColor(seed: string) {
-  let h = 0
-  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
-  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length]
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -64,23 +45,24 @@ const CATEGORY_STYLES: Record<string, string> = {
   Lifestyle:     'bg-pink-100 text-pink-700',
 }
 
-const MAX_COMMENT = 280
-
 export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const { user, profile } = useAuth()
   const { t, lang } = useLanguage()
   const { showToast } = useToast()
 
   const [poll, setPoll]            = useState(initialPoll)
-  const [votedOptionId, setVoted]  = useState<string | null>(null)
-  const [votedChecked, setChecked] = useState(false)
+  const {
+    votedOptionId, votedAt, checked: votedChecked,
+    setVotedOptionId: setVoted, setVotedAt,
+  } = useVoteStatus(poll.id, user?.id)
+  const { comments, reload: reloadComments } = useCommentsFeed(poll.id)
+
   const [selectedId, setSelected]  = useState<string | null>(null)
   const [comment, setComment]      = useState('')
   const [voteState, setVoteState]  = useState('')
   const [voteLga, setVoteLga]      = useState('')
   const [voting, setVoting]        = useState(false)
   const [voteError, setVoteError]  = useState('')
-  const [comments, setComments]    = useState<PollComment[]>([])
   const [revealing, setRevealing]  = useState(false)
   const [insight, setInsight]      = useState('')
   const [justJoined, setJustJoined] = useState(false)
@@ -89,7 +71,6 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
   // Edit window + vote-change window
   const [nowTs, setNowTs]          = useState(() => Date.now())
-  const [votedAt, setVotedAt]      = useState<number | null>(null)
   const [editing, setEditing]      = useState(false)
   const [editQuestion, setEditQuestion] = useState(initialPoll.question)
   const [editOpts, setEditOpts]    = useState(initialPoll.options.map((o) => ({ id: o.id, text: o.text })))
@@ -128,50 +109,6 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const showResults = !!votedOptionId || isExpired || !user
   const total       = poll.options.reduce((s, o) => s + o.vote_count, 0)
 
-  // Load the comment feed for this poll
-  const loadComments = useCallback(async () => {
-    const { data } = await supabase
-      .from('votes')
-      .select('id, comment, created_at, profile:profiles!user_id ( username )')
-      .eq('poll_id', poll.id)
-      .not('comment', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(50)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mapped: PollComment[] = (data ?? []).map((row: any) => {
-      const prof = Array.isArray(row.profile) ? row.profile[0] : row.profile
-      return {
-        id: row.id,
-        comment: row.comment,
-        created_at: row.created_at,
-        username: prof?.username ?? null,
-      }
-    })
-    setComments(mapped)
-  }, [poll.id])
-
-  // Check if this user already voted
-  useEffect(() => {
-    if (!user) { setChecked(true); return }
-    supabase
-      .from('votes')
-      .select('option_id, created_at')
-      .eq('poll_id', poll.id)
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setVoted(data.option_id as string)
-          setVotedAt(new Date(data.created_at as string).getTime())
-        }
-        setChecked(true)
-      })
-  }, [user, poll.id])
-
-  // Initial comment load
-  useEffect(() => { loadComments() }, [loadComments])
-
   // Live updates via Supabase Realtime
   useEffect(() => {
     const channel = supabase
@@ -193,15 +130,15 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes' }, (payload) => {
         const row = payload.new as { poll_id: string; comment: string | null }
-        if (row.poll_id === poll.id && row.comment) loadComments()
+        if (row.poll_id === poll.id && row.comment) reloadComments()
       })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [poll.id, loadComments])
+  }, [poll.id, reloadComments])
 
   // Apply the vote to local state and compute the post-vote insight.
-  function applyVoted(optionId: string) {
+  const applyVoted = useCallback((optionId: string) => {
     const newOptions = poll.options.map((o) =>
       o.id === optionId ? { ...o, vote_count: o.vote_count + 1 } : o
     )
@@ -230,7 +167,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         state: voteState || null,
       }, lang)
     )
-  }
+  }, [poll.options, voteState, lang, setVoted, setVotedAt])
 
   // The "Omo, see result!" moment: suspense → reveal + confetti.
   function runResultMoment(optionId: string) {
@@ -300,7 +237,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     } else {
       analytics.pollVoted(poll.id, poll.category, !!text, stateVal)
     }
-    if (text) loadComments()
+    if (text) reloadComments()
     if (isChallenge) setJustJoined(true)
     runResultMoment(optionId)
   }
@@ -408,54 +345,24 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
-      {/* Edit window banner */}
-      {editOpen && !editing && (
-        <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3">
-          <span className="text-sm font-semibold">
-            ✏️ {t('edit.banner')} {Math.ceil(editMsLeft / 1000)} {t('edit.seconds')}
-          </span>
-          <button
-            onClick={() => { setEditQuestion(poll.question); setEditOpts(poll.options.map((o) => ({ id: o.id, text: o.text }))); setEditing(true) }}
-            className="flex items-center gap-1.5 bg-amber-500 text-white text-xs font-bold px-3 min-h-[36px] rounded-full hover:bg-amber-600 active:scale-95 transition-all shrink-0"
-          >
-            <Pencil size={13} /> {t('edit.btn')}
-          </button>
-        </div>
-      )}
-
-      {/* Question — editable inline within the 60s window */}
-      {editing ? (
-        <div className="flex flex-col gap-3">
-          <textarea
-            value={editQuestion}
-            onChange={(e) => setEditQuestion(e.target.value.slice(0, 280))}
-            rows={2}
-            className="w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-lg font-bold bg-transparent resize-none outline-none focus:ring-2 focus:ring-amber-400"
-          />
-          <div className="flex flex-col gap-2">
-            {editOpts.map((o, i) => (
-              <input
-                key={o.id}
-                value={o.text}
-                onChange={(e) => setEditOpts((prev) => prev.map((x, idx) => idx === i ? { ...x, text: e.target.value.slice(0, 120) } : x))}
-                className="w-full border border-border rounded-xl px-4 py-2.5 text-base bg-transparent outline-none focus:ring-2 focus:ring-amber-400 min-h-[44px]"
-              />
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setEditing(false)} disabled={savingEdit}
-              className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors">
-              {t('edit.cancel')}
-            </button>
-            <button onClick={saveEdit} disabled={savingEdit}
-              className="flex-1 flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60">
-              {savingEdit ? <Loader2 size={16} className="animate-spin" /> : t('edit.save')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <h1 className="text-xl sm:text-2xl font-black text-foreground leading-snug">{poll.question}</h1>
-      )}
+      <EditableQuestion
+        question={poll.question}
+        editOpen={editOpen}
+        editing={editing}
+        editSecondsLeft={Math.ceil(editMsLeft / 1000)}
+        onStartEdit={() => {
+          setEditQuestion(poll.question)
+          setEditOpts(poll.options.map((o) => ({ id: o.id, text: o.text })))
+          setEditing(true)
+        }}
+        editQuestion={editQuestion}
+        onQuestionChange={setEditQuestion}
+        editOpts={editOpts}
+        onOptionChange={(i, value) => setEditOpts((prev) => prev.map((x, idx) => idx === i ? { ...x, text: value } : x))}
+        savingEdit={savingEdit}
+        onCancel={() => setEditing(false)}
+        onSave={saveEdit}
+      />
 
       {/* Poll meta row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -490,87 +397,20 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           locked={!!votedOptionId && !!votedAt && !changeOpen}
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          {poll.options
-            .slice()
-            .sort((a, b) => a.display_order - b.display_order)
-            .map((opt) => {
-              const isSel = selectedId === opt.id
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => setSelected(opt.id)}
-                  disabled={voting}
-                  aria-pressed={isSel}
-                  className={`w-full flex items-center justify-between gap-3 text-left px-4 sm:px-5 py-4 min-h-[56px] rounded-2xl border-2 transition-all duration-150 text-sm font-semibold disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary leading-snug ${
-                    isSel
-                      ? 'border-primary bg-primary-light text-primary'
-                      : 'border-border bg-card text-foreground hover:border-primary active:scale-[0.98]'
-                  }`}
-                >
-                  <span>{opt.text}</span>
-                  {isSel && <CheckCircle2 size={18} strokeWidth={2.5} className="shrink-0" />}
-                </button>
-              )
-            })}
-
-          {/* Optional comment + state — appears once an option is chosen */}
-          {selectedId && (
-            <div className="flex flex-col gap-3 pt-1">
-              {/* State (optional) — powers the state-by-state breakdown */}
-              <div className="flex items-center gap-2 border border-border rounded-xl px-3 min-h-[44px] focus-within:ring-2 focus-within:ring-primary">
-                <MapPin size={15} className="text-muted-foreground shrink-0" />
-                <select
-                  value={voteState}
-                  onChange={(e) => { setVoteState(e.target.value); setVoteLga('') }}
-                  className="flex-1 bg-transparent text-base outline-none py-2.5"
-                >
-                  <option value="">{t('vote.statePlaceholder')}</option>
-                  {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              {/* LGA (optional) — only once a state is chosen; powers the LGA breakdown */}
-              {voteState && (
-                <div className="flex items-center gap-2 border border-border rounded-xl px-3 min-h-[44px] focus-within:ring-2 focus-within:ring-primary">
-                  <MapPin size={15} className="text-muted-foreground shrink-0" />
-                  <select
-                    value={voteLga}
-                    onChange={(e) => setVoteLga(e.target.value)}
-                    className="flex-1 bg-transparent text-base outline-none py-2.5"
-                  >
-                    <option value="">{t('vote.lgaPlaceholder')}</option>
-                    {lgasForState(voteState).map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}
-                  placeholder={t('vote.commentPlaceholder')}
-                  rows={3}
-                  maxLength={MAX_COMMENT}
-                  className="w-full border border-border rounded-xl px-4 py-3 text-base bg-transparent resize-none outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
-                />
-                <p className="text-xs text-muted-foreground mt-1 text-right tabular-nums">
-                  {comment.length}/{MAX_COMMENT}
-                </p>
-              </div>
-              <button
-                onClick={submitVote}
-                disabled={voting}
-                className="w-full flex items-center justify-center gap-2 bg-primary text-white font-bold text-base py-4 min-h-[56px] rounded-xl hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-60"
-              >
-                {voting ? (
-                  <><Loader2 size={17} className="animate-spin" /> {t('vote.submitting')}</>
-                ) : (
-                  `${t('vote.submit')} (+${isChallenge ? 7 : 5} tokens)`
-                )}
-              </button>
-            </div>
-          )}
-        </div>
+        <VoteOptionsForm
+          options={poll.options}
+          selectedId={selectedId}
+          onSelect={setSelected}
+          voting={voting}
+          comment={comment}
+          onCommentChange={setComment}
+          voteState={voteState}
+          onStateChange={setVoteState}
+          voteLga={voteLga}
+          onLgaChange={setVoteLga}
+          onSubmit={submitVote}
+          isChallenge={isChallenge}
+        />
       )}
 
       {/* Voted confirmation */}
@@ -660,162 +500,6 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Comments feed */}
       <CommentsFeed comments={comments} />
-    </div>
-  )
-}
-
-// ── CSS progress-bar results — works at any width ─────────────
-
-interface ResultEntry {
-  id: string
-  text: string
-  vote_count: number
-  pct: number
-}
-
-function ResultsBars({
-  results,
-  votedOptionId,
-  total,
-  changeOpen = false,
-  changeSecondsLeft = 0,
-  changing = false,
-  onChange,
-  locked = false,
-}: {
-  results: ResultEntry[]
-  votedOptionId: string | null
-  total: number
-  changeOpen?: boolean
-  changeSecondsLeft?: number
-  changing?: boolean
-  onChange?: (optionId: string) => void
-  locked?: boolean
-}) {
-  const { t } = useLanguage()
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Change-your-vote window banner */}
-      {changeOpen && (
-        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-2.5 text-sm font-semibold">
-          <RefreshCw size={14} className={changing ? 'animate-spin' : ''} />
-          {t('change.banner')} {changeSecondsLeft} {t('change.suffix')}
-        </div>
-      )}
-      {/* Locked badge */}
-      {locked && (
-        <div className="flex items-center gap-2 bg-muted text-muted-foreground rounded-xl px-4 py-2.5 text-sm font-semibold">
-          <Lock size={14} /> {t('vote.locked')}
-        </div>
-      )}
-
-      {results.map((opt) => {
-        const isVoted = opt.id === votedOptionId
-        return (
-          <div key={opt.id}>
-            <div className="flex items-baseline justify-between gap-3 mb-1.5">
-              <span className={`text-sm leading-snug ${isVoted ? 'text-primary font-semibold' : 'text-foreground/80 font-medium'}`}>
-                {isVoted && (
-                  <CheckCircle2 size={13} className="inline mr-1 mb-0.5 shrink-0" />
-                )}
-                {opt.text}
-              </span>
-              <span className={`text-sm font-bold tabular-nums shrink-0 ${isVoted ? 'text-primary' : 'text-foreground'}`}>
-                {opt.pct}%
-              </span>
-            </div>
-            <div className="h-3 rounded-full bg-muted overflow-hidden">
-              <div
-                className={`h-full rounded-full animate-bar ${isVoted ? 'bg-primary' : 'bg-primary/30'}`}
-                style={{ width: `${opt.pct}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <p className="text-xs text-muted-foreground">
-                {opt.vote_count.toLocaleString()} vote{opt.vote_count !== 1 ? 's' : ''}
-              </p>
-              {changeOpen && !isVoted && onChange && (
-                <button
-                  onClick={() => onChange(opt.id)}
-                  disabled={changing}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {t('change.to')}
-                </button>
-              )}
-            </div>
-          </div>
-        )
-      })}
-      <p className="text-xs text-muted-foreground text-right border-t border-border pt-2.5 mt-1">
-        {total.toLocaleString()} {t('vote.totalVotes')}
-      </p>
-    </div>
-  )
-}
-
-// ── Challenge banner ──────────────────────────────────────────
-
-function ChallengeBanner({ pool }: { pool: number }) {
-  const { t } = useLanguage()
-  return (
-    <div className="flex items-start gap-2.5 bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-300 text-amber-800 rounded-xl px-4 py-3">
-      <Trophy size={18} strokeWidth={2.5} className="mt-0.5 shrink-0 text-amber-500" />
-      <div className="min-w-0">
-        <p className="text-xs font-bold uppercase tracking-wide">{t('challenge.badge')}</p>
-        <p className="text-sm font-semibold leading-snug">
-          {t('challenge.banner')} {pool.toLocaleString()} {t('challenge.tokens')} 🪙
-        </p>
-      </div>
-    </div>
-  )
-}
-
-// ── Comments feed ─────────────────────────────────────────────
-
-function CommentsFeed({ comments }: { comments: PollComment[] }) {
-  const { t } = useLanguage()
-  return (
-    <div className="flex flex-col gap-4 pt-4 border-t border-border">
-      <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-        <MessageCircle size={15} strokeWidth={2.5} />
-        {t('comments.title')}
-        <span className="text-muted-foreground font-normal">({comments.length})</span>
-      </h2>
-
-      {comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-4">
-          {t('comments.empty')}
-        </p>
-      ) : (
-      <div className="flex flex-col gap-4">
-        {comments.map((c) => {
-          const handle  = c.username ? `@${c.username}` : 'Anonymous'
-          const initials = c.username ? c.username.slice(0, 2).toUpperCase() : '?'
-          return (
-            <div key={c.id} className="flex gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0 select-none"
-                style={{ backgroundColor: avatarColor(c.username ?? c.id) }}
-                aria-hidden="true"
-              >
-                {initials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground truncate">{handle}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{timeAgo(c.created_at)}</span>
-                  <span className="ml-auto shrink-0"><ReportButton commentId={c.id} size={12} /></span>
-                </div>
-                <p className="text-sm text-foreground/80 leading-snug break-words mt-0.5">
-                  {c.comment}
-                </p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      )}
     </div>
   )
 }

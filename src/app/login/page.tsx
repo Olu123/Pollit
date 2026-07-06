@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { analytics } from '@/lib/analytics'
+import { friendlyAuthError } from '@/lib/authErrors'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { Turnstile } from '@marsidev/react-turnstile'
@@ -62,7 +63,7 @@ export default function LoginPage() {
       provider,
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
-    if (error) { setError(error.message); setBusy(false) }
+    if (error) { setError(friendlyAuthError(error)); setBusy(false) }
   }
 
   // ── Email ──────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ export default function LoginPage() {
     setBusy(true); reset()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(friendlyAuthError(error)); return }
     analytics.userSignedIn('email')
     router.push('/')
   }
@@ -85,7 +86,7 @@ export default function LoginPage() {
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(friendlyAuthError(error)); return }
     if (data.session) {
       analytics.userSignedUp('email')
       router.push('/profile')
@@ -101,7 +102,7 @@ export default function LoginPage() {
       redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
     })
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(friendlyAuthError(error)); return }
     setEmailStep('forgot-sent')
   }
 
@@ -128,7 +129,7 @@ export default function LoginPage() {
     setBusy(true); reset()
     const { error } = await supabase.auth.signInWithOtp({ phone })
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(friendlyAuthError(error)); return }
     setPhoneStep('otp')
   }
 
@@ -139,7 +140,7 @@ export default function LoginPage() {
       phone, token: otp.trim(), type: 'sms',
     })
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(friendlyAuthError(error)); return }
     analytics.userSignedIn('phone')
     router.push('/')
   }

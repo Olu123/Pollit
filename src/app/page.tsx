@@ -61,14 +61,15 @@ async function getHotTakes(): Promise<Poll[]> {
 }
 
 async function getTotals(): Promise<{ pollCount: number; voteCount: number; userCount: number }> {
-  const [{ data: polls }, { count: userCount }] = await Promise.all([
-    supabase.from('polls').select('total_votes').is('deleted_at', null).limit(1000),
+  const [{ data: totalsRows }, { count: userCount }] = await Promise.all([
+    supabase.rpc('platform_totals'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }),
   ])
+  const totals = Array.isArray(totalsRows) ? totalsRows[0] : totalsRows
 
   return {
-    pollCount: polls?.length ?? 0,
-    voteCount: (polls ?? []).reduce((s, p) => s + (p.total_votes ?? 0), 0),
+    pollCount: Number(totals?.poll_count ?? 0),
+    voteCount: Number(totals?.vote_count ?? 0),
     userCount: userCount ?? 0,
   }
 }

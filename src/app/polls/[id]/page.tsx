@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import type { Metadata } from 'next'
 import { ArrowLeft, Calendar, User, Share2, Users2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { communityAccessCookieName, verifyCommunityAccess } from '@/lib/communityAccess'
 import type { Poll } from '@/lib/types'
 import VotingPanel from '@/components/VotingPanel'
 import StateBreakdown from '@/components/StateBreakdown'
@@ -66,10 +68,32 @@ export default async function PollPage({
   const poll = await getPoll(id)
   if (!poll) notFound()
 
-  // Community poll gate — require the invite code.
-  if (poll.is_community && poll.community_code && code !== poll.community_code) {
-    return <CommunityGate pollId={poll.id} communityName={poll.community_name} />
+  // Community poll gate — require the invite code, and the password too if one is set.
+  const hasPassword = !!poll.community_password
+  if (poll.is_community) {
+    const codeOk = !poll.community_code || code === poll.community_code
+    // Only look at the signed cookie when a password is actually set — the
+    // plain code-only gate below must keep working even if the app has
+    // never been configured with COMMUNITY_ACCESS_SECRET. Fail closed (show
+    // the gate again) if verification throws rather than 500ing the page.
+    let cookieOk = false
+    if (hasPassword) {
+      try {
+        cookieOk = verifyCommunityAccess(
+          poll.id,
+          (await cookies()).get(communityAccessCookieName(poll.id))?.value
+        )
+      } catch (e) {
+        console.error('[community gate] verification unavailable:', e)
+      }
+    }
+    const accessGranted = cookieOk || (codeOk && !hasPassword)
+    if (!accessGranted) {
+      return <CommunityGate pollId={poll.id} communityName={poll.community_name} hasPassword={hasPassword} />
+    }
   }
+  // Never forward the password hash to client components below.
+  poll.community_password = null
 
   const createdAt = new Date(poll.created_at).toLocaleDateString('en-NG', {
     day: 'numeric',
