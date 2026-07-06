@@ -8,6 +8,8 @@ const OPTIONS: { value: Lang; label: string }[] = [
   { value: 'en',  label: 'EN' },
   { value: 'pid', label: 'PID' },
   { value: 'hau', label: 'HAU' },
+  { value: 'yor', label: 'YOR' },
+  { value: 'ibo', label: 'IBO' },
 ]
 
 export default function LanguageToggle() {
