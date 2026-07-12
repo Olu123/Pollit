@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, Loader2, Users2, Trophy } from 'lucide-react'
@@ -63,7 +63,7 @@ export default function CreatePollPage() {
   const [challengePool, setChallengePool] = useState('')
   const [busy, setBusy]         = useState(false)
   const [error, setError]       = useState('')
-  const [captchaToken, setCaptchaToken] = useState('')
+  const captchaTokenRef = useRef('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
   const isAdmin = !!profile?.is_admin
@@ -105,16 +105,16 @@ export default function CreatePollPage() {
 
     const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
     if (siteKey) {
-      if (!captchaToken) { setError('Please complete the security check.'); return }
+      if (!captchaTokenRef.current) { setError('Please complete the security check.'); return }
       const captchaRes = await fetch('/api/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: captchaToken }),
+        body: JSON.stringify({ token: captchaTokenRef.current }),
       })
       const captchaData = await captchaRes.json()
       if (!captchaData.success) {
         setError('Security check failed. Please try again.')
-        setCaptchaToken('')
+        captchaTokenRef.current = ''
         return
       }
     }
@@ -443,8 +443,8 @@ export default function CreatePollPage() {
         {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
           <Turnstile
             siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-            onSuccess={(token) => setCaptchaToken(token)}
-            onExpire={() => setCaptchaToken('')}
+            onSuccess={(token) => { captchaTokenRef.current = token }}
+            onExpire={() => { captchaTokenRef.current = '' }}
             options={{ theme: 'auto' }}
           />
         )}
