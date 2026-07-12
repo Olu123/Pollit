@@ -7,7 +7,6 @@ interface Winner {
   rank: number
   user_id: string
   username: string | null
-  tokens: number
   prize_ngn: number
 }
 
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
           <h2 style="margin:0 0 12px">Congratulations${w.username ? `, @${w.username}` : ''}! 🎉</h2>
           <p style="margin:0 0 12px">
             You placed <strong>${rankLabel(w.rank)}</strong> in WePollit's ${monthName} leaderboard and won
-            <strong>₦${w.prize_ngn.toLocaleString()}</strong>! We've also credited ${w.tokens.toLocaleString()} bonus tokens to your account.
+            <strong>₦${w.prize_ngn.toLocaleString()}</strong>!
           </p>
           <p style="margin:0">Contact <a href="mailto:hello@wepollit.com">hello@wepollit.com</a> to claim your prize.</p>
         </div>`,

@@ -16,7 +16,7 @@ interface Transaction {
 interface UserResult { id: string; username: string | null; points: number }
 
 interface MonthlyEntry { rank: number; user_id: string; username: string | null; monthly_tokens: number }
-interface Winner { rank: number; user_id: string; username: string | null; tokens: number; prize_ngn: number }
+interface Winner { rank: number; user_id: string; username: string | null; prize_ngn: number }
 
 const PRIZE_TIERS_NGN = [20000, 10000, 7000, 5000, 3000, 500, 500, 500, 500, 500]
 
@@ -75,7 +75,7 @@ export default function AdminTokensPage() {
     const winners = (data?.winners ?? []) as Winner[]
 
     // Email + announcement are best-effort — the distribution itself (the
-    // part that moves tokens) already succeeded above.
+    // part that records the winners) already succeeded above.
     await fetch('/api/admin/notify-monthly-winners', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -232,7 +232,7 @@ export default function AdminTokensPage() {
             <Trophy size={15} className="text-amber-500" /> Distribute Monthly Prize
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Awards bonus tokens to this month&rsquo;s top 10 by tokens earned and notifies them by email.
+            Records this month&rsquo;s top 10 by tokens earned as cash-prize winners and notifies them by email. No bonus tokens are awarded.
           </p>
         </div>
         <button

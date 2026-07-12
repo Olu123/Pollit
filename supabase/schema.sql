@@ -2508,10 +2508,9 @@ grant execute on function public.get_monthly_prize(int, int) to anon, authentica
 -- ── RPC: admin_distribute_monthly_prize ──────────────────────────
 -- Tiers: 1st ₦20,000 · 2nd ₦10,000 · 3rd ₦7,000 · 4th ₦5,000 · 5th ₦3,000
 -- · 6th-10th ₦500 each (totals ₦47,500 of the ₦50,000 pool, per the given
--- structure). Bonus tokens are awarded automatically (₦100 of prize = 1
--- token, a judgment call absent a specified conversion rate — easy to
--- tune); the NGN itself is paid out manually, which is why the winner
--- email directs them to contact hello@wepollit.com.
+-- structure). The cash prize is the entire reward — no bonus tokens are
+-- awarded here. The NGN itself is paid out manually, which is why the
+-- winner email directs them to contact hello@wepollit.com.
 create or replace function public.admin_distribute_monthly_prize(
   p_month int default extract(month from now())::int,
   p_year  int default extract(year from now())::int
@@ -2527,7 +2526,6 @@ declare
   v_winners  jsonb := '[]'::jsonb;
   v_rank     int := 1;
   v_prize    integer;
-  v_tokens   integer;
 begin
   if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
     raise exception 'not_authorized';
@@ -2539,18 +2537,11 @@ begin
   end if;
 
   for v_row in select * from public.monthly_leaderboard(p_month, p_year) loop
-    v_prize  := v_tiers[v_rank];
-    v_tokens := round(v_prize / 100.0);
-
-    update profiles set points = points + v_tokens, updated_at = now() where id = v_row.user_id;
-
-    insert into token_transactions (user_id, username, amount, reason, reason_type)
-    values (v_row.user_id, v_row.username, v_tokens,
-            format('Monthly prize — rank %s (₦%s)', v_rank, v_prize), 'monthly_prize');
+    v_prize := v_tiers[v_rank];
 
     v_winners := v_winners || jsonb_build_object(
       'rank', v_rank, 'user_id', v_row.user_id, 'username', v_row.username,
-      'tokens', v_tokens, 'prize_ngn', v_prize
+      'prize_ngn', v_prize
     );
     v_rank := v_rank + 1;
   end loop;

@@ -36,7 +36,7 @@ interface MonthlyPrize {
   year: number
   prize_pool: number
   status: 'active' | 'distributed' | 'cancelled'
-  winners: { rank: number; user_id: string; username: string | null; tokens: number; prize_ngn: number }[] | null
+  winners: { rank: number; user_id: string; username: string | null; prize_ngn: number }[] | null
 }
 
 const PRIZE_TIERS_NGN = [20000, 10000, 7000, 5000, 3000, 500, 500, 500, 500, 500]
