@@ -57,6 +57,7 @@ export interface Poll {
   is_flagged: boolean
   deleted_at: string | null
   created_at: string
+  image_url: string | null
   profile: Profile | null
   options: PollOption[]
 }
@@ -70,12 +71,22 @@ export interface Vote {
   state: string | null
   changed_at: string | null
   original_option_id: string | null
+  agree_count: number
+  disagree_count: number
+  tips_received: number
   created_at: string
 }
 
+export type CommentReaction = 'agree' | 'disagree'
+
 export interface PollComment {
   id: string
+  user_id: string
   comment: string
   created_at: string
   username: string | null
+  agree_count: number
+  disagree_count: number
+  tips_received: number
+  user_reaction: CommentReaction | null
 }

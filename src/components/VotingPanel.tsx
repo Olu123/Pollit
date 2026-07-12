@@ -55,7 +55,7 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     votedOptionId, votedAt, checked: votedChecked,
     setVotedOptionId: setVoted, setVotedAt,
   } = useVoteStatus(poll.id, user?.id)
-  const { comments, reload: reloadComments } = useCommentsFeed(poll.id)
+  const { comments, reload: reloadComments } = useCommentsFeed(poll.id, user?.id)
 
   const [selectedId, setSelected]  = useState<string | null>(null)
   const [comment, setComment]      = useState('')
@@ -66,6 +66,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
   const [revealing, setRevealing]  = useState(false)
   const [insight, setInsight]      = useState('')
   const [justJoined, setJustJoined] = useState(false)
+
+  // Guest voting — mirrors votedOptionId/votedAt but for unauthenticated
+  // visitors, sourced from the httpOnly session cookie via /api/guest-vote
+  // rather than a direct `votes` table read (see useVoteStatus).
+  const [guestVotedOptionId, setGuestVotedOptionId] = useState<string | null>(null)
+  const [guestVoting, setGuestVoting]   = useState(false)
+  const [guestVoteError, setGuestVoteError] = useState('')
+  const [showGuestUpsell, setShowGuestUpsell] = useState(true)
 
   const isChallenge = !!poll.is_challenge
 
@@ -105,8 +113,21 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     if (profile?.state_of_origin) setVoteState(profile.state_of_origin)
   }, [profile?.state_of_origin])
 
+  // Has this browser already guest-voted on this poll? The session cookie
+  // is httpOnly, so this has to go through the API route rather than a
+  // direct client-side read.
+  useEffect(() => {
+    if (user) return
+    fetch(`/api/guest-vote?poll_id=${poll.id}`)
+      .then((r) => r.json())
+      .then((data: { voted: boolean; optionId?: string }) => {
+        if (data.voted && data.optionId) setGuestVotedOptionId(data.optionId)
+      })
+      .catch(() => {})
+  }, [poll.id, user])
+
   const isExpired   = new Date(poll.expires_at).getTime() <= Date.now()
-  const showResults = !!votedOptionId || isExpired || !user
+  const showResults = !!votedOptionId || isExpired || (!user && !!guestVotedOptionId)
   const total       = poll.options.reduce((s, o) => s + o.vote_count, 0)
 
   // Live updates via Supabase Realtime
@@ -131,6 +152,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes' }, (payload) => {
         const row = payload.new as { poll_id: string; comment: string | null }
         if (row.poll_id === poll.id && row.comment) reloadComments()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_reactions' }, (payload) => {
+        const row = (payload.new ?? payload.old) as { poll_id: string }
+        if (row.poll_id === poll.id) reloadComments()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comment_tips' }, (payload) => {
+        const row = payload.new as { poll_id: string }
+        if (row.poll_id === poll.id) reloadComments()
       })
       .subscribe()
 
@@ -240,6 +269,39 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
     if (text) reloadComments()
     if (isChallenge) setJustJoined(true)
     runResultMoment(optionId)
+  }
+
+  // Guest vote: stored separately (guest_votes), never touches
+  // poll_options.vote_count / polls.total_votes — no applyVoted call here,
+  // since that's what makes a vote count publicly. No confetti either;
+  // the point is to keep this feeling provisional until they sign up.
+  async function submitGuestVote() {
+    if (!selectedId) return
+    const optionId = selectedId
+    setGuestVoting(true)
+    setGuestVoteError('')
+
+    const res = await fetch('/api/guest-vote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pollId: poll.id, optionId }),
+    })
+    setGuestVoting(false)
+
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: 'unknown_error' }))
+      setGuestVoteError(
+        error?.includes('already_voted') ? t('vote.already')
+          : error?.includes('poll_ended') ? t('vote.pollEnded')
+          : error?.includes('hourly_vote_limit_reached') ? "You're voting too fast! Please slow down."
+          : 'Something went wrong. Please try again.'
+      )
+      return
+    }
+
+    analytics.pollVoted(poll.id, poll.category, false, null)
+    setGuestVotedOptionId(optionId)
+    setShowGuestUpsell(true)
   }
 
   // ── Edit window ─────────────────────────────────────────────
@@ -386,30 +448,38 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
 
       {/* Vote selection OR results */}
       {showResults ? (
-        <ResultsBars
-          results={results}
-          votedOptionId={votedOptionId}
-          total={total}
-          changeOpen={changeOpen}
-          changeSecondsLeft={Math.ceil(changeMsLeft / 1000)}
-          changing={changing}
-          onChange={changeVote}
-          locked={!!votedOptionId && !!votedAt && !changeOpen}
-        />
+        <>
+          {!user && guestVotedOptionId && (
+            <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              📊 {t('guest.resultsTitle')}
+            </p>
+          )}
+          <ResultsBars
+            results={results}
+            votedOptionId={votedOptionId}
+            total={total}
+            changeOpen={changeOpen}
+            changeSecondsLeft={Math.ceil(changeMsLeft / 1000)}
+            changing={changing}
+            onChange={changeVote}
+            locked={!!votedOptionId && !!votedAt && !changeOpen}
+          />
+        </>
       ) : (
         <VoteOptionsForm
           options={poll.options}
           selectedId={selectedId}
           onSelect={setSelected}
-          voting={voting}
+          voting={user ? voting : guestVoting}
           comment={comment}
           onCommentChange={setComment}
           voteState={voteState}
           onStateChange={setVoteState}
           voteLga={voteLga}
           onLgaChange={setVoteLga}
-          onSubmit={submitVote}
+          onSubmit={user ? submitVote : submitGuestVote}
           isChallenge={isChallenge}
+          isGuest={!user}
         />
       )}
 
@@ -476,8 +546,37 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </div>
       )}
 
-      {/* Unauthenticated prompt */}
-      {!user && !isExpired && (
+      {/* Guest post-vote upsell */}
+      {!user && guestVotedOptionId && showGuestUpsell && (
+        <div className="flex flex-col gap-3 bg-primary-light/40 border border-primary/20 rounded-xl p-4">
+          <p className="text-sm font-semibold text-foreground">
+            👤 {t('guest.votedAsGuest')} {t('guest.signUpPrompt')}
+          </p>
+          <ul className="flex flex-col gap-1.5 text-sm text-foreground/80">
+            <li>✅ {t('guest.benefitCounted')}</li>
+            <li>✅ {t('guest.benefitTokens')}</li>
+            <li>✅ {t('guest.benefitBreakdown')}</li>
+            <li>✅ {t('guest.benefitJoin')}</li>
+          </ul>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="flex-1 flex items-center justify-center gap-2 bg-primary text-white text-sm font-bold px-6 py-3 rounded-full hover:bg-primary-dark active:scale-95 transition-all min-h-[48px]"
+            >
+              {t('guest.signUpBtn')}
+            </Link>
+            <button
+              onClick={() => setShowGuestUpsell(false)}
+              className="flex-1 text-sm font-semibold text-muted-foreground hover:text-foreground px-6 py-3 rounded-full hover:bg-muted transition-all min-h-[48px]"
+            >
+              {t('guest.maybeLater')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Unauthenticated prompt — poll ended before the visitor voted at all */}
+      {!user && isExpired && !guestVotedOptionId && (
         <div className="flex flex-col items-center gap-3 py-2 text-center">
           <p className="text-sm text-muted-foreground">
             {t('vote.signInPrompt')}{' '}
@@ -498,8 +597,14 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         </p>
       )}
 
+      {guestVoteError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          {guestVoteError}
+        </p>
+      )}
+
       {/* Comments feed */}
-      <CommentsFeed comments={comments} />
+      <CommentsFeed comments={comments} onReload={reloadComments} />
     </div>
   )
 }

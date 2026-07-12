@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Clock, Users } from 'lucide-react'
 import type { Poll, PollCategory } from '@/lib/types'
 import { useLanguage } from './LanguageProvider'
@@ -90,6 +91,19 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
           <PollActionsMenu pollId={poll.id} createdBy={poll.created_by} />
         </div>
       </div>
+
+      {poll.image_url && (
+        <div className="relative w-full aspect-video rounded-lg overflow-hidden -mt-0.5">
+          <Image
+            src={poll.image_url}
+            alt={poll.question}
+            fill
+            loading="lazy"
+            sizes="(min-width: 640px) 400px, 100vw"
+            className="object-cover"
+          />
+        </div>
+      )}
 
       <h3 className="font-bold text-foreground text-[15px] leading-snug line-clamp-3">{poll.question}</h3>
 

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export const revalidate = 30
 
 const POLL_SELECT = `
-  id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at,
+  id, question, category, created_by, expires_at, total_votes, is_hot_take, created_at, image_url,
   profile:profiles!created_by ( id, username, avatar_url ),
   options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
 `

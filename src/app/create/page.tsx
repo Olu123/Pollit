@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Loader2, Users2, Trophy } from 'lucide-react'
+import { Plus, Trash2, Loader2, Users2, Trophy, ImagePlus, X } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import type { PollCategory } from '@/lib/types'
@@ -12,10 +12,14 @@ import { sanitizePollQuestion, sanitizePollOption } from '@/lib/sanitize'
 import { getAccountAgeDays, getAccountAgeHours, getAccountPermissions } from '@/lib/accountAge'
 import { analytics } from '@/lib/analytics'
 import { Turnstile } from '@marsidev/react-turnstile'
+import { uploadPollImage, MAX_POLL_IMAGE_BYTES, ACCEPTED_POLL_IMAGE_TYPES } from '@/lib/uploadImage'
 import Link from 'next/link'
 
 const HOT_TAKE_MIN_TOKENS = 100
 const CAPTCHA_SKIP_MIN_TOKENS = 50
+// Same "trusted account" bar as the captcha skip — quality control so
+// image uploads aren't a low-effort spam/abuse vector for brand-new accounts.
+const IMAGE_UPLOAD_MIN_TOKENS = 50
 
 function genCommunityCode() {
   const letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ'
@@ -66,8 +70,14 @@ export default function CreatePollPage() {
   const [error, setError]       = useState('')
   const captchaTokenRef = useRef('')
 
+  const [imageFile, setImageFile]   = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageError, setImageError] = useState('')
+  const [dragOver, setDragOver]     = useState(false)
+
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
   const skipCaptcha = (profile?.points ?? 0) >= CAPTCHA_SKIP_MIN_TOKENS
+  const canAddImage = (profile?.points ?? 0) >= IMAGE_UPLOAD_MIN_TOKENS
   const isAdmin = !!profile?.is_admin
   const poolNum = Math.max(0, Math.floor(Number(challengePool) || 0))
 
@@ -93,6 +103,29 @@ export default function CreatePollPage() {
 
   function removeOption(i: number) {
     if (options.length > 2) setOptions((p) => p.filter((_, idx) => idx !== i))
+  }
+
+  function selectImage(file: File | undefined | null) {
+    if (!file) return
+    setImageError('')
+    if (!ACCEPTED_POLL_IMAGE_TYPES.includes(file.type)) {
+      setImageError('Please choose a JPG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > MAX_POLL_IMAGE_BYTES) {
+      setImageError(`That image is too large — max ${MAX_POLL_IMAGE_BYTES / 1024 / 1024}MB.`)
+      return
+    }
+    if (imagePreview) URL.revokeObjectURL(imagePreview)
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  function removeImage() {
+    if (imagePreview) URL.revokeObjectURL(imagePreview)
+    setImageFile(null)
+    setImagePreview(null)
+    setImageError('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -156,6 +189,19 @@ export default function CreatePollPage() {
       isCommunity,
       makeChallenge,
     )
+
+    // Image upload happens after the poll exists — the storage policy
+    // checks the poll's created_by, so it needs a real poll id (see
+    // src/lib/uploadImage.ts and the poll_images_write policy).
+    if (imageFile && canAddImage) {
+      try {
+        const imageUrl = await uploadPollImage(imageFile, pollId)
+        await supabase.rpc('set_poll_image', { p_poll_id: pollId, p_image_url: imageUrl })
+      } catch {
+        // Poll is already created; don't block navigation on a failed image upload.
+      }
+    }
+
     if (isCommunity && communityCode) {
       router.push(`/polls/${pollId}?code=${communityCode}`)
     } else {
@@ -436,10 +482,56 @@ export default function CreatePollPage() {
           </div>
         </div>
 
+        {/* Optional image */}
+        {canAddImage && (
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              {t('create.imageLabel')} <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            {imagePreview ? (
+              <div className="relative rounded-xl overflow-hidden border border-border aspect-video">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, next/image can't optimize blob: URLs */}
+                <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  aria-label="Remove image"
+                  className="absolute top-2 right-2 flex items-center justify-center w-9 h-9 rounded-full bg-gray-950/70 text-white hover:bg-gray-950/90 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <label
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  selectImage(e.dataTransfer.files?.[0])
+                }}
+                className={`flex flex-col items-center justify-center gap-2 aspect-video rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                  dragOver ? 'border-primary bg-primary-light/40' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <ImagePlus size={22} className="text-muted-foreground" />
+                <span className="text-sm text-muted-foreground text-center px-4">{t('create.imageDropHint')}</span>
+                <input
+                  type="file"
+                  accept={ACCEPTED_POLL_IMAGE_TYPES.join(',')}
+                  onChange={(e) => selectImage(e.target.files?.[0])}
+                  className="hidden"
+                />
+              </label>
+            )}
+            {imageError && <p className="text-xs text-red-600 mt-1.5">{imageError}</p>}
+          </div>
+        )}
+
         {/* Live preview */}
         <div>
           <label className="block text-sm font-semibold text-foreground mb-2">{t('create.preview')}</label>
-          <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} isHotTake={canHotTake && isHotTake} />
+          <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} isHotTake={canHotTake && isHotTake} imageUrl={imagePreview} />
         </div>
 
         {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !skipCaptcha && (
@@ -550,19 +642,24 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 function PreviewCard({
-  question, category, options, expiryDays, isHotTake,
+  question, category, options, expiryDays, isHotTake, imageUrl,
 }: {
   question: string
   category: PollCategory
   options: string[]
   expiryDays: number
   isHotTake: boolean
+  imageUrl?: string | null
 }) {
   const { t } = useLanguage()
   const opts = options.length ? options : ['Option 1', 'Option 2']
   const empty = options.length === 0
   return (
     <div className={`rounded-xl border shadow-sm p-4 flex flex-col gap-3 ${isHotTake ? 'bg-gray-900 border-gray-800' : 'bg-card border-border'}`}>
+      {imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+        <img src={imageUrl} alt="" className="w-full aspect-video object-cover rounded-lg -mt-1" />
+      )}
       <div className="flex items-center justify-between gap-2">
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isHotTake ? 'bg-[#DC2626] text-white' : CATEGORY_STYLES[category]}`}>
           {isHotTake ? <span className="inline-flex items-center gap-1"><span className="animate-flame">🔥</span> {t(`cat.${category}` as StringKey)}</span> : t(`cat.${category}` as StringKey)}

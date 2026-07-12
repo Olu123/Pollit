@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Users } from 'lucide-react'
 import type { Poll, PollCategory } from '@/lib/types'
 import { useLanguage } from './LanguageProvider'
@@ -20,6 +21,21 @@ export default function HotTakeCard({ poll }: { poll: Poll }) {
       href={`/polls/${poll.id}`}
       className="group relative shrink-0 w-[280px] sm:w-[300px] snap-start bg-gray-900 rounded-xl border border-gray-800 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-200 p-5 flex flex-col gap-3.5 overflow-hidden"
     >
+      {/* background image + dark overlay, so the question stays legible */}
+      {poll.image_url && (
+        <>
+          <Image
+            src={poll.image_url}
+            alt=""
+            fill
+            loading="lazy"
+            sizes="300px"
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900/95 via-gray-900/70 to-gray-900/30" />
+        </>
+      )}
+
       {/* glow */}
       <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#DC2626]/20 rounded-full blur-2xl pointer-events-none" />
 

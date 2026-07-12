@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Search, Trophy } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -14,6 +14,11 @@ interface Transaction {
 }
 
 interface UserResult { id: string; username: string | null; points: number }
+
+interface MonthlyEntry { rank: number; user_id: string; username: string | null; monthly_tokens: number }
+interface Winner { rank: number; user_id: string; username: string | null; tokens: number; prize_ngn: number }
+
+const PRIZE_TIERS_NGN = [20000, 10000, 7000, 5000, 3000, 500, 500, 500, 500, 500]
 
 const EARN_RATES = [
   { action: 'Cast a vote',      tokens: 5 },
@@ -33,7 +38,62 @@ export default function AdminTokensPage() {
   const [busy,      setBusy]      = useState(false)
   const [toast,     setToast]     = useState('')
 
+  const [prizeModalOpen, setPrizeModalOpen] = useState(false)
+  const [monthlyTop10, setMonthlyTop10]     = useState<MonthlyEntry[]>([])
+  const [alreadyDistributed, setAlreadyDistributed] = useState(false)
+  const [distributing, setDistributing]     = useState(false)
+
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
+
+  async function openPrizeModal() {
+    const now = new Date()
+    const [{ data: top10 }, { data: existing }] = await Promise.all([
+      supabase.rpc('monthly_leaderboard'),
+      supabase.rpc('get_monthly_prize', { p_month: now.getMonth() + 1, p_year: now.getFullYear() }),
+    ])
+    setMonthlyTop10((top10 ?? []) as MonthlyEntry[])
+    setAlreadyDistributed(existing?.status === 'distributed')
+    setPrizeModalOpen(true)
+  }
+
+  async function handleDistribute() {
+    setDistributing(true)
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
+
+    const { data, error } = await supabase.rpc('admin_distribute_monthly_prize', {
+      p_month: month, p_year: year,
+    })
+
+    if (error) {
+      setDistributing(false)
+      showToast(error.message.includes('already_distributed') ? 'Already distributed this month.' : error.message)
+      return
+    }
+
+    const winners = (data?.winners ?? []) as Winner[]
+
+    // Email + announcement are best-effort — the distribution itself (the
+    // part that moves tokens) already succeeded above.
+    await fetch('/api/admin/notify-monthly-winners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, year, winners }),
+    }).catch(() => {})
+
+    const top = winners[0]
+    if (top) {
+      const monthName = now.toLocaleString('en-NG', { month: 'long' })
+      await supabase.from('announcements').insert({
+        message: `🎉 ${monthName} Winners Announced! @${top.username ?? 'anonymous'} won ₦${top.prize_ngn.toLocaleString()}! Check the leaderboard for the full list.`,
+      })
+    }
+
+    setDistributing(false)
+    setPrizeModalOpen(false)
+    showToast(`Monthly prize distributed to ${winners.length} winners! 🏆`)
+  }
 
   const loadTxns = useCallback(async () => {
     setLoading(true)
@@ -165,6 +225,65 @@ export default function AdminTokensPage() {
         </div>
       </div>
 
+      {/* Monthly prize distribution */}
+      <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+            <Trophy size={15} className="text-amber-500" /> Distribute Monthly Prize
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Awards bonus tokens to this month&rsquo;s top 10 by tokens earned and notifies them by email.
+          </p>
+        </div>
+        <button
+          onClick={openPrizeModal}
+          className="shrink-0 min-h-[44px] px-4 rounded-xl bg-amber-500 text-white text-sm font-bold hover:brightness-95 transition-all"
+        >
+          Preview & Distribute
+        </button>
+      </div>
+
+      {prizeModalOpen && (
+        <Modal title="🏆 Distribute Monthly Prize" onClose={() => !distributing && setPrizeModalOpen(false)}>
+          {alreadyDistributed ? (
+            <p className="text-sm text-foreground/80">This month&rsquo;s prize has already been distributed.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+                {monthlyTop10.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No token activity this month yet.</p>
+                ) : (
+                  monthlyTop10.map((e) => (
+                    <div key={e.user_id} className="flex items-center justify-between text-sm">
+                      <span className="text-foreground">#{e.rank} @{e.username ?? 'anonymous'}</span>
+                      <span className="text-muted-foreground">
+                        {e.monthly_tokens.toLocaleString()} tokens · ₦{(PRIZE_TIERS_NGN[e.rank - 1] ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => setPrizeModalOpen(false)}
+                  disabled={distributing}
+                  className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDistribute}
+                  disabled={distributing || monthlyTop10.length === 0}
+                  className="flex-1 flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-amber-500 text-white text-sm font-bold hover:brightness-95 transition-all disabled:opacity-60"
+                >
+                  {distributing ? <Loader2 size={16} className="animate-spin" /> : 'Confirm & Distribute'}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
       {/* Transaction history */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
@@ -204,6 +323,20 @@ export default function AdminTokensPage() {
             </table>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-[85] bg-gray-950/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl p-5 w-full max-w-sm flex flex-col gap-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-bold text-foreground">{title}</h3>
+        {children}
       </div>
     </div>
   )

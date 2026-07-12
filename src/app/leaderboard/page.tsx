@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Star, BarChart2, CheckSquare, Trophy } from 'lucide-react'
+import { Star, BarChart2, CheckSquare, Trophy, Gift } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { T } from '@/components/LanguageProvider'
 import ViewTracker from '@/components/ViewTracker'
@@ -14,7 +14,7 @@ export const revalidate = 300 // re-fetch at most every 5 minutes
 
 // ── Types ─────────────────────────────────────────────────────
 
-type TabKey = 'overall' | 'voters' | 'creators'
+type TabKey = 'overall' | 'voters' | 'creators' | 'monthly'
 
 interface LeaderboardEntry {
   id: string
@@ -24,13 +24,37 @@ interface LeaderboardEntry {
   polls_created: number
 }
 
+interface MonthlyEntry {
+  rank: number
+  user_id: string
+  username: string | null
+  monthly_tokens: number
+}
+
+interface MonthlyPrize {
+  month: number
+  year: number
+  prize_pool: number
+  status: 'active' | 'distributed' | 'cancelled'
+  winners: { rank: number; user_id: string; username: string | null; tokens: number; prize_ngn: number }[] | null
+}
+
+const PRIZE_TIERS_NGN = [20000, 10000, 7000, 5000, 3000, 500, 500, 500, 500, 500]
+
 // ── Helpers ───────────────────────────────────────────────────
 
 const TABS = [
   { key: 'overall'  as TabKey, labelKey: 'lb.overall'     as StringKey, icon: Star,        hintKey: 'lb.hintOverall'  as StringKey },
   { key: 'voters'   as TabKey, labelKey: 'lb.topVoters'   as StringKey, icon: CheckSquare, hintKey: 'lb.hintVoters'   as StringKey },
   { key: 'creators' as TabKey, labelKey: 'lb.topCreators' as StringKey, icon: BarChart2,   hintKey: 'lb.hintCreators' as StringKey },
+  { key: 'monthly'  as TabKey, labelKey: 'lb.monthly'     as StringKey, icon: Gift,        hintKey: 'lb.hintMonthly'  as StringKey },
 ] as const
+
+function daysUntilEndOfMonth(): number {
+  const now = new Date()
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 86_400_000))
+}
 
 const AVATAR_PALETTE = [
   '#16a34a','#2563eb','#7c3aed','#dc2626',
@@ -99,6 +123,21 @@ async function getLeaderboardData(): Promise<LeaderboardEntry[]> {
   }))
 }
 
+async function getMonthlyLeaderboard(): Promise<MonthlyEntry[]> {
+  const { data, error } = await supabase.rpc('monthly_leaderboard')
+  if (error) {
+    console.error('[Leaderboard] monthly_leaderboard fetch:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
+async function getMonthlyPrize(): Promise<MonthlyPrize | null> {
+  const { data, error } = await supabase.rpc('get_monthly_prize')
+  if (error || !data || !data.month) return null
+  return data
+}
+
 // ── Page ──────────────────────────────────────────────────────
 
 export default async function LeaderboardPage({
@@ -107,14 +146,19 @@ export default async function LeaderboardPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { tab: rawTab = 'overall' } = await searchParams
-  const tab: TabKey = (['overall', 'voters', 'creators'] as const).includes(rawTab as TabKey)
+  const tab: TabKey = (['overall', 'voters', 'creators', 'monthly'] as const).includes(rawTab as TabKey)
     ? (rawTab as TabKey)
     : 'overall'
 
-  const entries = await getLeaderboardData()
-  const sorted  = sortEntries(entries, tab)
+  const [entries, monthlyEntries, monthlyPrize] = await Promise.all([
+    tab === 'monthly' ? Promise.resolve([]) : getLeaderboardData(),
+    tab === 'monthly' ? getMonthlyLeaderboard() : Promise.resolve([]),
+    getMonthlyPrize(),
+  ])
+  const sorted = sortEntries(entries, tab)
 
   const activeTab = TABS.find((t) => t.key === tab)!
+  const monthName = new Date().toLocaleString('en-NG', { month: 'long', year: 'numeric' })
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6">
@@ -129,10 +173,14 @@ export default async function LeaderboardPage({
             <T k="lb.title" />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            <T k={activeTab.hintKey} /> · {sorted.length} <T k="lb.rankedUsers" />
+            <T k={activeTab.hintKey} /> ·{' '}
+            {tab === 'monthly' ? monthlyEntries.length : sorted.length} <T k="lb.rankedUsers" />
           </p>
         </div>
       </div>
+
+      {/* Monthly prize banner */}
+      <MonthlyPrizeBanner monthName={monthName} prize={monthlyPrize} daysLeft={daysUntilEndOfMonth()} />
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-0.5">
@@ -156,7 +204,17 @@ export default async function LeaderboardPage({
       </div>
 
       {/* Board */}
-      {sorted.length === 0 ? (
+      {tab === 'monthly' ? (
+        monthlyEntries.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {monthlyEntries.map((entry) => (
+              <MonthlyLeaderboardRow key={entry.user_id} entry={entry} />
+            ))}
+          </div>
+        )
+      ) : sorted.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="flex flex-col gap-2">
@@ -246,6 +304,101 @@ function LeaderboardRow({
         <div className={`flex items-center gap-1 font-bold tabular-nums ${tab === 'overall' ? 'text-primary' : 'text-foreground'}`}>
           <Star size={12} strokeWidth={2.5} className={tab === 'overall' ? 'text-primary' : 'text-muted-foreground'} />
           <span className="text-sm">{fmtNum(entry.points)}</span>
+        </div>
+        <span className="text-[10px] text-muted-foreground"><T k="lb.tokens" /></span>
+      </div>
+    </div>
+  )
+}
+
+// ── Monthly prize ─────────────────────────────────────────────
+
+function MonthlyPrizeBanner({
+  monthName, prize, daysLeft,
+}: {
+  monthName: string
+  prize: MonthlyPrize | null
+  daysLeft: number
+}) {
+  const pool = prize?.prize_pool ?? 50000
+  const distributed = prize?.status === 'distributed' && prize.winners?.length
+
+  return (
+    <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-2xl p-5 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Trophy size={20} className="shrink-0" />
+        <p className="text-lg font-black leading-snug">
+          🏆 {monthName} <T k="lb.prizeTitle" />
+        </p>
+      </div>
+
+      {distributed ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-white/95">
+            🎉 <T k="lb.winnersAnnounced" />
+          </p>
+          {prize!.winners!.slice(0, 3).map((w) => (
+            <p key={w.rank} className="text-sm text-white/90">
+              {MEDAL[w.rank - 1] ?? `#${w.rank}`} {w.username ? `@${w.username}` : 'Anonymous'} — ₦{w.prize_ngn.toLocaleString()}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-white/90">
+            ₦{pool.toLocaleString()} <T k="lb.prizePoolUpForGrabs" />
+          </p>
+          <div className="flex flex-col gap-1 text-sm font-semibold">
+            <p>🥇 <T k="lb.rank1" />: ₦{PRIZE_TIERS_NGN[0].toLocaleString()}</p>
+            <p>🥈 <T k="lb.rank2" />: ₦{PRIZE_TIERS_NGN[1].toLocaleString()}</p>
+            <p>🥉 <T k="lb.rank3" />: ₦{PRIZE_TIERS_NGN[2].toLocaleString()}</p>
+          </div>
+          <p className="text-xs font-bold bg-white/15 rounded-full px-3 py-1.5 w-fit">
+            ⏳ <T k="lb.timeRemaining" />: {daysLeft} <T k="lb.days" />
+          </p>
+          <p className="text-xs text-white/80">
+            <T k="lb.earnHint" />
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function MonthlyLeaderboardRow({ entry }: { entry: MonthlyEntry }) {
+  const medal = entry.rank <= 3 ? MEDAL[entry.rank - 1] : null
+  const accentBorder = RANK_BORDER[entry.rank] ?? ''
+  const displayName = entry.username ? `@${entry.username}` : 'Anonymous'
+  const bg = avatarColor(entry.user_id)
+  const initials = getInitials(entry.username)
+  const tierNgn = PRIZE_TIERS_NGN[entry.rank - 1]
+
+  return (
+    <div className={`bg-card border rounded-2xl px-4 py-3.5 flex items-center gap-3 transition-shadow hover:shadow-sm ${accentBorder}`}>
+      <div className="w-8 flex items-center justify-center shrink-0">
+        {medal ? (
+          <span className="text-xl leading-none">{medal}</span>
+        ) : (
+          <span className="text-sm font-bold text-muted-foreground tabular-nums">{entry.rank}</span>
+        )}
+      </div>
+      <div
+        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 select-none"
+        style={{ backgroundColor: bg }}
+        aria-hidden="true"
+      >
+        {initials}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-foreground text-sm truncate leading-tight">{displayName}</p>
+        {tierNgn && (
+          <p className="text-xs text-amber-600 font-semibold mt-1">≈ ₦{tierNgn.toLocaleString()}</p>
+        )}
+      </div>
+      <div className="shrink-0 flex flex-col items-end gap-0.5">
+        <div className="flex items-center gap-1 font-bold tabular-nums text-primary">
+          <Star size={12} strokeWidth={2.5} className="text-primary" />
+          <span className="text-sm">{fmtNum(entry.monthly_tokens)}</span>
         </div>
         <span className="text-[10px] text-muted-foreground"><T k="lb.tokens" /></span>
       </div>

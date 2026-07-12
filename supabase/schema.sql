@@ -1940,3 +1940,669 @@ language sql stable security definer set search_path = public as $$
   where deleted_at is null;
 $$;
 grant execute on function public.platform_totals() to anon, authenticated;
+
+-- ── Comment reactions + tipping ────────────────────────────────
+
+alter table public.votes add column if not exists agree_count    integer not null default 0;
+alter table public.votes add column if not exists disagree_count integer not null default 0;
+alter table public.votes add column if not exists tips_received  integer not null default 0;
+
+create table if not exists public.comment_reactions (
+  id         uuid default gen_random_uuid() primary key,
+  vote_id    uuid references public.votes(id) on delete cascade not null,
+  poll_id    uuid references public.polls(id) on delete cascade not null,
+  user_id    uuid references public.profiles(id) on delete cascade not null,
+  reaction   text not null check (reaction in ('agree','disagree')),
+  created_at timestamptz not null default now(),
+  unique(vote_id, user_id)
+);
+alter table public.comment_reactions enable row level security;
+create policy "comment_reactions_read"  on public.comment_reactions for select using (true);
+create policy "comment_reactions_owner" on public.comment_reactions for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create index if not exists comment_reactions_vote_id_idx on public.comment_reactions(vote_id);
+-- poll_id is denormalized (same pattern as token_transactions.poll_id) so the
+-- realtime listener on the poll page can filter client-side without a join.
+create index if not exists comment_reactions_poll_id_idx on public.comment_reactions(poll_id);
+
+create table if not exists public.comment_tips (
+  id           uuid default gen_random_uuid() primary key,
+  vote_id      uuid references public.votes(id) on delete cascade not null,
+  poll_id      uuid references public.polls(id) on delete cascade not null,
+  sender_id    uuid references public.profiles(id) not null,
+  recipient_id uuid references public.profiles(id) not null,
+  amount       integer not null check (amount > 0),
+  created_at   timestamptz not null default now()
+);
+alter table public.comment_tips enable row level security;
+create policy "comment_tips_read" on public.comment_tips for select using (true);
+-- Inserts only via the tip_comment() RPC (security definer) — no direct-insert policy.
+create index if not exists comment_tips_vote_id_idx on public.comment_tips(vote_id);
+create index if not exists comment_tips_poll_id_idx on public.comment_tips(poll_id);
+
+-- Full row data on DELETE (toggling a reaction off) so the realtime listener
+-- can filter by poll_id from payload.old — by default Postgres only ships
+-- the primary key on delete.
+alter table public.comment_reactions replica identity full;
+
+alter publication supabase_realtime add table public.comment_reactions;
+alter publication supabase_realtime add table public.comment_tips;
+
+-- ── RPC: react_to_comment ──────────────────────────────────────
+-- Toggles the caller's agree/disagree reaction on a comment (voting on the
+-- same reaction again removes it) and keeps votes.agree_count/disagree_count
+-- in sync so the UI can read them without a join.
+create or replace function public.react_to_comment(p_vote_id uuid, p_reaction text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid          uuid := auth.uid();
+  v_comment_uid  uuid;
+  v_poll_id      uuid;
+  v_existing     text;
+  v_agree_count    integer;
+  v_disagree_count integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if p_reaction not in ('agree', 'disagree') then raise exception 'invalid_reaction'; end if;
+
+  if exists (select 1 from profiles where id = v_uid and is_suspended = true) then
+    raise exception 'suspended';
+  end if;
+
+  select user_id, poll_id into v_comment_uid, v_poll_id from votes where id = p_vote_id;
+  if v_comment_uid is null then raise exception 'comment_not_found'; end if;
+  if v_comment_uid = v_uid then raise exception 'cannot_react_to_own_comment'; end if;
+
+  select reaction into v_existing
+  from comment_reactions where vote_id = p_vote_id and user_id = v_uid;
+
+  if v_existing = p_reaction then
+    delete from comment_reactions where vote_id = p_vote_id and user_id = v_uid;
+  elsif v_existing is not null then
+    update comment_reactions set reaction = p_reaction, created_at = now()
+    where vote_id = p_vote_id and user_id = v_uid;
+  else
+    insert into comment_reactions (vote_id, poll_id, user_id, reaction)
+    values (p_vote_id, v_poll_id, v_uid, p_reaction);
+  end if;
+
+  select count(*) filter (where reaction = 'agree'),
+         count(*) filter (where reaction = 'disagree')
+    into v_agree_count, v_disagree_count
+  from comment_reactions where vote_id = p_vote_id;
+
+  update votes set agree_count = v_agree_count, disagree_count = v_disagree_count
+  where id = p_vote_id;
+
+  return jsonb_build_object(
+    'agree_count', v_agree_count,
+    'disagree_count', v_disagree_count,
+    'user_reaction', case when v_existing = p_reaction then null else p_reaction end
+  );
+end;
+$$;
+grant execute on function public.react_to_comment(uuid, text) to authenticated;
+
+-- ── RPC: tip_comment ────────────────────────────────────────────
+-- First user-initiated token spend in the app — unlike the award-only
+-- paths above, this debits the sender, so it needs its own balance check
+-- (no existing precedent to copy). Mirrors cast_vote's hourly-limit style
+-- to blunt rapid wash-tipping between colluding accounts.
+create or replace function public.tip_comment(p_vote_id uuid, p_amount integer)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid           uuid := auth.uid();
+  v_recipient     uuid;
+  v_sender_pts    integer;
+  v_poll_id       uuid;
+  v_sender_name   text;
+  v_recipient_name text;
+  v_new_balance   integer;
+  v_tips_received integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if p_amount is null or p_amount <= 0 then raise exception 'invalid_amount'; end if;
+  if p_amount > 1000 then raise exception 'amount_too_large'; end if;
+
+  if exists (select 1 from profiles where id = v_uid and is_suspended = true) then
+    raise exception 'suspended';
+  end if;
+
+  select user_id, poll_id into v_recipient, v_poll_id from votes where id = p_vote_id;
+  if v_recipient is null then raise exception 'comment_not_found'; end if;
+  if v_recipient = v_uid then raise exception 'cannot_tip_self'; end if;
+
+  if exists (select 1 from profiles where id = v_recipient and is_suspended = true) then
+    raise exception 'recipient_suspended';
+  end if;
+
+  select points into v_sender_pts from profiles where id = v_uid;
+  if v_sender_pts < p_amount then raise exception 'insufficient_balance'; end if;
+
+  if (select coalesce(sum(amount), 0) from comment_tips
+        where sender_id = v_uid and created_at > now() - interval '1 hour') + p_amount > 500
+     or (select count(*) from comment_tips
+        where sender_id = v_uid and created_at > now() - interval '1 hour') >= 20 then
+    raise exception 'hourly_tip_limit_reached';
+  end if;
+
+  update profiles set points = points - p_amount, updated_at = now()
+  where id = v_uid returning points into v_new_balance;
+
+  update profiles set points = points + p_amount, updated_at = now()
+  where id = v_recipient;
+
+  update votes set tips_received = tips_received + p_amount
+  where id = p_vote_id returning tips_received into v_tips_received;
+
+  insert into comment_tips (vote_id, poll_id, sender_id, recipient_id, amount)
+  values (p_vote_id, v_poll_id, v_uid, v_recipient, p_amount);
+
+  select username into v_sender_name from profiles where id = v_uid;
+  select username into v_recipient_name from profiles where id = v_recipient;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  values
+    (v_uid, v_sender_name, -p_amount, 'Tip sent', 'tip', v_poll_id),
+    (v_recipient, v_recipient_name, p_amount, 'Tip received', 'tip', v_poll_id);
+
+  return jsonb_build_object(
+    'success', true,
+    'new_balance', v_new_balance,
+    'tips_received', v_tips_received
+  );
+end;
+$$;
+grant execute on function public.tip_comment(uuid, integer) to authenticated;
+
+-- ── transparency_supply / transparency_daily (v2 — exclude tips) ──
+-- Tips are a peer-to-peer transfer of already-distributed tokens (each tip
+-- inserts a matching -N/+N pair), not new distribution. Left uncorrected,
+-- the +N recipient leg would double-count as freshly "distributed" tokens.
+-- transparency_by_type() is intentionally left as-is: showing gross tip
+-- volume as its own category there is informative, unlike the headline
+-- distributed/circulating totals here.
+create or replace function public.transparency_supply()
+returns table(distributed bigint, circulating bigint)
+language sql stable security definer set search_path = public as $$
+  select
+    coalesce(sum(amount) filter (where amount > 0 and reason_type <> 'tip'), 0)::bigint as distributed,
+    coalesce(sum(amount), 0)::bigint                                                    as circulating
+  from token_transactions;
+$$;
+grant execute on function public.transparency_supply() to anon, authenticated;
+
+create or replace function public.transparency_daily(p_days int default 30)
+returns table(date date, tokens_distributed bigint, transaction_count bigint)
+language sql stable security definer set search_path = public as $$
+  select date_trunc('day', created_at)::date                                             as date,
+         coalesce(sum(amount) filter (where amount > 0 and reason_type <> 'tip'), 0)::bigint as tokens_distributed,
+         count(*)::bigint                                                                 as transaction_count
+  from token_transactions
+  where created_at > now() - make_interval(days => greatest(p_days, 1))
+  group by 1
+  order by 1;
+$$;
+grant execute on function public.transparency_daily(int) to anon, authenticated;
+
+-- ── Guest voting ────────────────────────────────────────────────
+-- Guest votes are stored separately from `votes` and never touch
+-- poll_options.vote_count / polls.total_votes — they're not counted in
+-- public tallies until the guest signs up and their vote is migrated.
+
+create table if not exists public.guest_votes (
+  id           uuid default gen_random_uuid() primary key,
+  poll_id      uuid references public.polls(id) on delete cascade not null,
+  option_id    uuid references public.poll_options(id) on delete cascade not null,
+  session_id   text not null,
+  ip_hash      text,
+  created_at   timestamptz default now(),
+  migrated_to  uuid references public.votes(id),
+  unique(poll_id, session_id)
+);
+alter table public.guest_votes enable row level security;
+-- No public select/insert policy: guest_votes is only ever read or written
+-- through the security-definer RPCs below, since RLS can't scope rows by
+-- an arbitrary session_id the way it scopes by auth.uid().
+create index if not exists guest_votes_session_id_idx on public.guest_votes(session_id);
+create index if not exists guest_votes_poll_id_idx    on public.guest_votes(poll_id);
+create index if not exists guest_votes_pending_idx    on public.guest_votes(session_id) where migrated_to is null;
+
+-- ── RPC: cast_guest_vote ──────────────────────────────────────
+create or replace function public.cast_guest_vote(
+  p_poll_id    uuid,
+  p_option_id  uuid,
+  p_session_id text,
+  p_ip_hash    text default null
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_poll polls%rowtype;
+begin
+  if p_session_id is null or btrim(p_session_id) = '' then raise exception 'missing_session'; end if;
+
+  select * into v_poll from polls where id = p_poll_id and deleted_at is null;
+  if v_poll.id is null then raise exception 'poll_not_found'; end if;
+  if v_poll.expires_at <= now() then raise exception 'poll_ended'; end if;
+
+  if not exists (select 1 from poll_options where id = p_option_id and poll_id = p_poll_id) then
+    raise exception 'invalid_option';
+  end if;
+
+  -- Mirrors cast_vote's 30/hour cadence limit, keyed by ip_hash since guests
+  -- have no user_id — blunts trivial farming via clearing the session cookie.
+  if p_ip_hash is not null and (
+       select count(*) from guest_votes
+       where ip_hash = p_ip_hash and created_at > now() - interval '1 hour'
+     ) >= 30 then
+    raise exception 'hourly_vote_limit_reached';
+  end if;
+
+  insert into guest_votes (poll_id, option_id, session_id, ip_hash)
+  values (p_poll_id, p_option_id, p_session_id, p_ip_hash);
+
+  return jsonb_build_object('success', true);
+exception
+  when unique_violation then raise exception 'already_voted';
+end;
+$$;
+grant execute on function public.cast_guest_vote(uuid, uuid, text, text) to anon, authenticated;
+
+-- ── RPC: get_guest_vote ─────────────────────────────────────────
+-- Lets the guest-vote status API (which reads the httpOnly session cookie
+-- server-side) look up whether this session already voted on a poll.
+create or replace function public.get_guest_vote(p_poll_id uuid, p_session_id text)
+returns table(option_id uuid, created_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select option_id, created_at from guest_votes
+  where poll_id = p_poll_id and session_id = p_session_id and migrated_to is null;
+$$;
+grant execute on function public.get_guest_vote(uuid, text) to anon, authenticated;
+
+-- ── RPC: migrate_guest_votes ────────────────────────────────────
+-- Called right after a guest signs up (see AuthProvider's login-transition
+-- hook). Converts every not-yet-migrated guest vote tied to their old
+-- session into a real vote, with the same +5 token reward cast_vote grants,
+-- awarded retroactively. Rows are kept (migrated_to set) rather than
+-- deleted, so guest-to-signup conversion stays visible for analytics —
+-- callers should treat migrated_to is not null as "already handled".
+create or replace function public.migrate_guest_votes(p_session_id text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_row   record;
+  v_vote_id uuid;
+  v_migrated int := 0;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if p_session_id is null or btrim(p_session_id) = '' then
+    return jsonb_build_object('migrated', 0);
+  end if;
+
+  for v_row in
+    select * from guest_votes
+    where session_id = p_session_id and migrated_to is null
+  loop
+    -- Skip polls the user already has a real vote on (e.g. voted again
+    -- after signing in) rather than erroring the whole batch.
+    if exists (select 1 from votes where poll_id = v_row.poll_id and user_id = v_uid) then
+      continue;
+    end if;
+
+    insert into votes (poll_id, option_id, user_id)
+    values (v_row.poll_id, v_row.option_id, v_uid)
+    returning id into v_vote_id;
+
+    update poll_options set vote_count = vote_count + 1 where id = v_row.option_id;
+    update polls         set total_votes = total_votes + 1 where id = v_row.poll_id;
+    update profiles
+       set points = points + 5,
+           first_vote_at = coalesce(first_vote_at, now()),
+           updated_at = now()
+     where id = v_uid;
+
+    insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+    select v_uid, p.username, 5, 'Vote reward (guest vote migrated)', 'vote', v_row.poll_id
+    from profiles p where p.id = v_uid;
+
+    update guest_votes set migrated_to = v_vote_id where id = v_row.id;
+    v_migrated := v_migrated + 1;
+  end loop;
+
+  return jsonb_build_object('migrated', v_migrated);
+end;
+$$;
+grant execute on function public.migrate_guest_votes(text) to authenticated;
+
+-- ── Image polls ─────────────────────────────────────────────────
+
+alter table public.polls add column if not exists image_url text;
+
+-- Public bucket for poll images. 2MB limit, jpg/png/webp only, enforced
+-- both here (defense in depth) and client-side in the upload helper.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('poll-images', 'poll-images', true, 2097152, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+-- Uploads are named `polls/<poll_id>.<ext>` (see src/lib/uploadImage.ts) —
+-- the poll_id is parsed back out of the object path so only that poll's
+-- creator can write to it, and only if they clear the 50-token quality
+-- gate. Recording the resulting URL on polls.image_url happens through
+-- set_poll_image() below, not a plain update — the general
+-- creators_can_update_polls policy only checks ownership, not tokens.
+create policy "poll_images_read" on storage.objects for select
+  using (bucket_id = 'poll-images');
+
+create policy "poll_images_write" on storage.objects for insert
+  with check (
+    bucket_id = 'poll-images'
+    and auth.uid() is not null
+    and exists (select 1 from profiles where id = auth.uid() and points >= 50)
+    and exists (
+      select 1 from polls
+      where id = (regexp_match(name, '^polls/([0-9a-fA-F-]{36})\.'))[1]::uuid
+        and created_by = auth.uid()
+    )
+  );
+
+create policy "poll_images_update" on storage.objects for update
+  using (
+    bucket_id = 'poll-images'
+    and exists (
+      select 1 from polls
+      where id = (regexp_match(name, '^polls/([0-9a-fA-F-]{36})\.'))[1]::uuid
+        and created_by = auth.uid()
+    )
+  )
+  with check (
+    bucket_id = 'poll-images'
+    and exists (select 1 from profiles where id = auth.uid() and points >= 50)
+  );
+
+create policy "poll_images_delete" on storage.objects for delete
+  using (
+    bucket_id = 'poll-images'
+    and exists (
+      select 1 from polls
+      where id = (regexp_match(name, '^polls/([0-9a-fA-F-]{36})\.'))[1]::uuid
+        and created_by = auth.uid()
+    )
+  );
+
+-- ── create_poll (v6 — optional image_url, 50-token gate) ───────
+-- Adding a parameter changes the function's arity, so the 11-arg overload
+-- must be dropped explicitly — `create or replace` only replaces a
+-- function with the exact same signature, otherwise Postgres keeps both
+-- and a call omitting p_image_url becomes an ambiguous-overload error.
+drop function if exists public.create_poll(text, text, text[], timestamptz, boolean, boolean, text, text, text, boolean, integer);
+create or replace function public.create_poll(
+  p_question     text,
+  p_category     text,
+  p_options      text[],
+  p_expires_at   timestamptz,
+  p_is_hot_take  boolean default false,
+  p_is_community boolean default false,
+  p_community_name     text default null,
+  p_community_code     text default null,
+  p_community_password text default null,
+  p_is_challenge   boolean default false,
+  p_challenge_pool integer default 0,
+  p_image_url      text default null
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid              uuid := auth.uid();
+  v_poll_id          uuid;
+  v_idx              int;
+  v_is_challenge      boolean := coalesce(p_is_challenge, false);
+  v_account_age_hours numeric;
+  v_polls_today       integer;
+  v_max_polls         integer;
+  v_password          text := nullif(btrim(p_community_password), '');
+  v_image_url         text := nullif(btrim(p_image_url), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if array_length(p_options, 1) < 2 then raise exception 'min_2_options'; end if;
+
+  if v_image_url is not null and not exists (
+    select 1 from profiles where id = v_uid and points >= 50
+  ) then
+    raise exception 'image_requires_50_tokens';
+  end if;
+
+  -- Account age gate — admins are exempt (they create challenges etc.).
+  select extract(epoch from (now() - created_at)) / 3600
+    into v_account_age_hours
+  from profiles where id = v_uid;
+
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    if v_account_age_hours < 1 then
+      raise exception 'account_too_new_to_create_polls';
+    end if;
+
+    -- Dynamic daily limit: under 7 days (168h) old → 2/day, otherwise 5/day.
+    v_max_polls := case when v_account_age_hours < 168 then 2 else 5 end;
+
+    select count(*) into v_polls_today
+    from polls
+    where created_by = v_uid
+      and created_at > now() - interval '24 hours'
+      and deleted_at is null;
+
+    if v_polls_today >= v_max_polls then
+      raise exception 'daily_poll_limit_reached';
+    end if;
+  end if;
+
+  -- Only admins may create challenges.
+  if v_is_challenge and not exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  insert into polls (question, category, created_by, expires_at, is_hot_take,
+                     is_community, community_name, community_code, community_password,
+                     is_challenge, challenge_pool, challenge_status, image_url)
+  values (p_question, p_category, v_uid, p_expires_at, coalesce(p_is_hot_take, false),
+          coalesce(p_is_community, false),
+          nullif(btrim(p_community_name), ''),
+          nullif(btrim(p_community_code), ''),
+          case when v_password is null then null else crypt(v_password, gen_salt('bf')) end,
+          v_is_challenge,
+          case when v_is_challenge then greatest(coalesce(p_challenge_pool, 0), 0) else 0 end,
+          'active',
+          v_image_url)
+  returning id into v_poll_id;
+
+  for v_idx in 1 .. array_length(p_options, 1) loop
+    insert into poll_options (poll_id, text, display_order)
+    values (v_poll_id, p_options[v_idx], v_idx);
+  end loop;
+
+  update profiles
+     set points = points + 20,
+         first_poll_at = coalesce(first_poll_at, now()),
+         updated_at = now()
+   where id = v_uid;
+
+  insert into token_transactions (user_id, username, amount, reason, reason_type, poll_id)
+  select v_uid, p.username, 20, 'Poll creation reward', 'poll_created', v_poll_id
+  from profiles p where p.id = v_uid;
+
+  perform public.check_suspicious_behaviour(v_uid, v_poll_id, 'poll_created');
+
+  return v_poll_id;
+end;
+$$;
+
+-- ── Monthly leaderboard prize ───────────────────────────────────
+
+create table if not exists public.monthly_prizes (
+  id             uuid default gen_random_uuid() primary key,
+  month          integer not null check (month between 1 and 12),
+  year           integer not null,
+  prize_pool     integer not null default 50000,
+  currency       text default 'NGN',
+  status         text not null default 'active' check (status in ('active', 'distributed', 'cancelled')),
+  winners        jsonb,
+  distributed_at timestamptz,
+  created_at     timestamptz default now(),
+  unique(month, year)
+);
+alter table public.monthly_prizes enable row level security;
+create policy "monthly_prizes_read" on public.monthly_prizes for select using (true);
+create policy "monthly_prizes_admin_all" on public.monthly_prizes for all using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+
+-- ── RPC: monthly_leaderboard ─────────────────────────────────────
+-- Tips and admin adjustments are transfers/manual corrections, not
+-- platform-earned tokens — excluding them (same reasoning as
+-- transparency_supply's 'distributed' fix above) matters a lot more here
+-- since real money rides on this ranking. monthly_prize is also excluded
+-- so winning one month's prize can't mechanically pad next month's.
+create or replace function public.monthly_leaderboard(
+  p_month int default extract(month from now())::int,
+  p_year  int default extract(year from now())::int
+)
+returns table(rank bigint, user_id uuid, username text, monthly_tokens bigint)
+language sql stable security definer set search_path = public as $$
+  select row_number() over (order by sum(amount) desc) as rank,
+         user_id, max(username) as username, sum(amount)::bigint as monthly_tokens
+  from token_transactions
+  where extract(month from created_at) = p_month
+    and extract(year from created_at) = p_year
+    and amount > 0
+    and reason_type not in ('admin_adjustment', 'tip', 'monthly_prize')
+  group by user_id
+  order by monthly_tokens desc
+  limit 10;
+$$;
+grant execute on function public.monthly_leaderboard(int, int) to anon, authenticated;
+
+-- ── RPC: get_monthly_prize ────────────────────────────────────────
+create or replace function public.get_monthly_prize(
+  p_month int default extract(month from now())::int,
+  p_year  int default extract(year from now())::int
+)
+returns public.monthly_prizes
+language sql stable security definer set search_path = public as $$
+  select * from monthly_prizes where month = p_month and year = p_year;
+$$;
+grant execute on function public.get_monthly_prize(int, int) to anon, authenticated;
+
+-- ── RPC: admin_distribute_monthly_prize ──────────────────────────
+-- Tiers: 1st ₦20,000 · 2nd ₦10,000 · 3rd ₦7,000 · 4th ₦5,000 · 5th ₦3,000
+-- · 6th-10th ₦500 each (totals ₦47,500 of the ₦50,000 pool, per the given
+-- structure). Bonus tokens are awarded automatically (₦100 of prize = 1
+-- token, a judgment call absent a specified conversion rate — easy to
+-- tune); the NGN itself is paid out manually, which is why the winner
+-- email directs them to contact hello@wepollit.com.
+create or replace function public.admin_distribute_monthly_prize(
+  p_month int default extract(month from now())::int,
+  p_year  int default extract(year from now())::int
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid      uuid := auth.uid();
+  v_existing public.monthly_prizes%rowtype;
+  v_tiers    integer[] := array[20000,10000,7000,5000,3000,500,500,500,500,500];
+  v_row      record;
+  v_winners  jsonb := '[]'::jsonb;
+  v_rank     int := 1;
+  v_prize    integer;
+  v_tokens   integer;
+begin
+  if not exists (select 1 from profiles where id = v_uid and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+
+  select * into v_existing from monthly_prizes where month = p_month and year = p_year;
+  if v_existing.status = 'distributed' then
+    raise exception 'already_distributed';
+  end if;
+
+  for v_row in select * from public.monthly_leaderboard(p_month, p_year) loop
+    v_prize  := v_tiers[v_rank];
+    v_tokens := round(v_prize / 100.0);
+
+    update profiles set points = points + v_tokens, updated_at = now() where id = v_row.user_id;
+
+    insert into token_transactions (user_id, username, amount, reason, reason_type)
+    values (v_row.user_id, v_row.username, v_tokens,
+            format('Monthly prize — rank %s (₦%s)', v_rank, v_prize), 'monthly_prize');
+
+    v_winners := v_winners || jsonb_build_object(
+      'rank', v_rank, 'user_id', v_row.user_id, 'username', v_row.username,
+      'tokens', v_tokens, 'prize_ngn', v_prize
+    );
+    v_rank := v_rank + 1;
+  end loop;
+
+  insert into monthly_prizes (month, year, status, winners, distributed_at)
+  values (p_month, p_year, 'distributed', v_winners, now())
+  on conflict (month, year) do update
+    set status = 'distributed', winners = v_winners, distributed_at = now();
+
+  return jsonb_build_object('success', true, 'winners', v_winners);
+end;
+$$;
+grant execute on function public.admin_distribute_monthly_prize(int, int) to authenticated;
+
+-- ── RPC: admin_get_user_emails ────────────────────────────────
+-- Deliberately separate from the (publicly readable) monthly_prizes.winners
+-- jsonb — winner usernames are public (leaderboard/homepage announcement),
+-- but emails must stay admin-only, so they're fetched on demand here
+-- rather than ever being embedded in that public column.
+create or replace function public.admin_get_user_emails(p_user_ids uuid[])
+returns table(id uuid, email text)
+language sql stable security definer set search_path = public as $$
+  select u.id, u.email
+  from auth.users u
+  where u.id = any(p_user_ids)
+    and exists (select 1 from profiles where id = auth.uid() and is_admin = true);
+$$;
+grant execute on function public.admin_get_user_emails(uuid[]) to authenticated;
+
+-- ── RPC: set_poll_image ──────────────────────────────────────────
+-- The client uploads to poll-images via Storage (gated by the
+-- poll_images_write policy's 50-token check) and then calls this to record
+-- the URL. Doing that last step through an RPC (rather than a plain
+-- `.update()` under the general creators_can_update_polls policy, which
+-- only checks ownership) closes a gap: without this, any creator could set
+-- image_url to an arbitrary URL, bypassing the 50-token gate entirely.
+create or replace function public.set_poll_image(p_poll_id uuid, p_image_url text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare v_uid uuid := auth.uid();
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from profiles where id = v_uid and points >= 50) then
+    raise exception 'image_requires_50_tokens';
+  end if;
+  if not exists (select 1 from polls where id = p_poll_id and created_by = v_uid) then
+    raise exception 'not_authorized';
+  end if;
+
+  update polls set image_url = nullif(btrim(p_image_url), '') where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end;
+$$;
+grant execute on function public.set_poll_image(uuid, text) to authenticated;

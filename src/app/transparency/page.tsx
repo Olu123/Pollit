@@ -24,6 +24,8 @@ const TYPE_META: Record<string, { label: string; emoji: string; badge: string; c
   referral:         { label: 'Referral rewards',   emoji: '👥', badge: 'bg-purple-100 text-purple-700', color: '#7c3aed' },
   admin_adjustment: { label: 'Admin adjustments',  emoji: '⚙️', badge: 'bg-gray-100 text-gray-600',     color: '#6b7280' },
   signup:           { label: 'Signup bonus',       emoji: '🎁', badge: 'bg-pink-100 text-pink-700',     color: '#db2777' },
+  tip:              { label: 'Comment tips',       emoji: '💸', badge: 'bg-teal-100 text-teal-700',     color: '#0d9488' },
+  monthly_prize:    { label: 'Monthly prize',       emoji: '🏆', badge: 'bg-yellow-100 text-yellow-700', color: '#ca8a04' },
 }
 
 function typeMeta(t: string) {

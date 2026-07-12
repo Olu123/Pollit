@@ -1,8 +1,11 @@
 'use client'
 
-import { MessageCircle } from 'lucide-react'
+import { Gift, MessageCircle } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import ReportButton from '@/components/ReportButton'
+import CommentReactions from './CommentReactions'
+import TipButton from './TipButton'
 import type { PollComment } from '@/lib/types'
 
 const AVATAR_PALETTE = [
@@ -28,7 +31,14 @@ function timeAgo(iso: string) {
   return `${Math.floor(d / 7)}w ago`
 }
 
-export default function CommentsFeed({ comments }: { comments: PollComment[] }) {
+export default function CommentsFeed({
+  comments,
+  onReload,
+}: {
+  comments: PollComment[]
+  onReload: () => void
+}) {
+  const { user } = useAuth()
   const { t } = useLanguage()
   return (
     <div className="flex flex-col gap-4 pt-4 border-t border-border">
@@ -47,6 +57,7 @@ export default function CommentsFeed({ comments }: { comments: PollComment[] }) 
         {comments.map((c) => {
           const handle  = c.username ? `@${c.username}` : 'Anonymous'
           const initials = c.username ? c.username.slice(0, 2).toUpperCase() : '?'
+          const isOwnComment = !!user && user.id === c.user_id
           return (
             <div key={c.id} className="flex gap-2.5">
               <div
@@ -60,11 +71,33 @@ export default function CommentsFeed({ comments }: { comments: PollComment[] }) 
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground truncate">{handle}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{timeAgo(c.created_at)}</span>
-                  <span className="ml-auto shrink-0"><ReportButton commentId={c.id} size={12} /></span>
+                  <span className="ml-auto shrink-0 flex items-center">
+                    <TipButton
+                      voteId={c.id}
+                      recipientUsername={c.username}
+                      isOwnComment={isOwnComment}
+                      onTipped={onReload}
+                    />
+                    <ReportButton commentId={c.id} size={12} />
+                  </span>
                 </div>
                 <p className="text-sm text-foreground/80 leading-snug break-words mt-0.5">
                   {c.comment}
                 </p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <CommentReactions
+                    voteId={c.id}
+                    isOwnComment={isOwnComment}
+                    agreeCount={c.agree_count}
+                    disagreeCount={c.disagree_count}
+                    userReaction={c.user_reaction}
+                  />
+                  {c.tips_received > 0 && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-amber-600">
+                      <Gift size={11} /> {c.tips_received.toLocaleString()}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )

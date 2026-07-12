@@ -11,6 +11,7 @@ import StateBreakdown from '@/components/StateBreakdown'
 import FloatingShare from '@/components/FloatingShare'
 import CommunityGate from '@/components/CommunityGate'
 import PollActionsMenu from '@/components/PollActionsMenu'
+import PollImage from '@/components/PollImage'
 import { T } from '@/components/LanguageProvider'
 import { SITE_URL } from '@/lib/site'
 import { shareMessages, whatsappHref } from '@/lib/share'
@@ -18,7 +19,7 @@ import { shareMessages, whatsappHref } from '@/lib/share'
 const POLL_SELECT = `
   id, question, category, created_by, expires_at, total_votes, is_hot_take,
   is_community, community_name, community_code, community_password, created_at,
-  is_challenge, challenge_pool, challenge_status, challenge_distributed,
+  is_challenge, challenge_pool, challenge_status, challenge_distributed, image_url,
   profile:profiles!created_by ( id, username, avatar_url ),
   options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
 `
@@ -175,6 +176,9 @@ export default async function PollPage({
             </div>
           </div>
         )}
+
+        {/* Image */}
+        {poll.image_url && <PollImage src={poll.image_url} alt={poll.question} />}
 
         {/* Meta */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
