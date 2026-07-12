@@ -15,6 +15,7 @@ import { Turnstile } from '@marsidev/react-turnstile'
 import Link from 'next/link'
 
 const HOT_TAKE_MIN_TOKENS = 100
+const CAPTCHA_SKIP_MIN_TOKENS = 50
 
 function genCommunityCode() {
   const letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ'
@@ -66,6 +67,7 @@ export default function CreatePollPage() {
   const captchaTokenRef = useRef('')
 
   const canHotTake = (profile?.points ?? 0) >= HOT_TAKE_MIN_TOKENS
+  const skipCaptcha = (profile?.points ?? 0) >= CAPTCHA_SKIP_MIN_TOKENS
   const isAdmin = !!profile?.is_admin
   const poolNum = Math.max(0, Math.floor(Number(challengePool) || 0))
 
@@ -104,7 +106,7 @@ export default function CreatePollPage() {
     if (trimmed.length < 2)  return setError('Please fill in at least 2 options.')
 
     const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
-    if (siteKey) {
+    if (siteKey && !skipCaptcha) {
       if (!captchaTokenRef.current) { setError('Please complete the security check.'); return }
       const captchaRes = await fetch('/api/verify-captcha', {
         method: 'POST',
@@ -440,7 +442,7 @@ export default function CreatePollPage() {
           <PreviewCard question={question} category={category} options={filledOptions} expiryDays={expiryDays} isHotTake={canHotTake && isHotTake} />
         </div>
 
-        {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+        {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !skipCaptcha && (
           <Turnstile
             siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
             onSuccess={(token) => { captchaTokenRef.current = token }}
