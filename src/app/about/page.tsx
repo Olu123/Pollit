@@ -150,7 +150,7 @@ export default function AboutPage() {
               <Avatar initials="OO" color="red" />
               <div className="flex flex-col gap-1">
                 <h3 className="text-xl font-black text-foreground">Olusegun Ogundeji</h3>
-                <p className="text-sm font-semibold text-primary">Founder &amp; CEO</p>
+                <p className="text-sm font-semibold text-primary">Founder</p>
               </div>
             </div>
 
@@ -163,7 +163,7 @@ export default function AboutPage() {
               </p>
               <p>
                 He has covered African technology for IDG News Service, CIO Africa and ITWeb Africa, and has
-                worked as an EU Election Observer.
+                served as Press and Media assistant to a core member of an EU Election Observation Mission.
               </p>
               <p>
                 He also founded 1news.ng — an automated Nigerian news platform — and has applied his research and
@@ -172,10 +172,10 @@ export default function AboutPage() {
             </div>
 
             <blockquote className="border-l-4 border-[#DC2626] pl-4 sm:pl-5 py-1 italic text-foreground/90 text-base sm:text-lg leading-relaxed">
-              &ldquo;I built WePollit because I believe the voice of the people is the most powerful force in any
-              democracy — and Nigeria deserves a platform that honours that voice.&rdquo;
+              &ldquo;The voice of the people is the most powerful force in any democracy. Nigeria deserves a
+              platform that honours that voice.&rdquo;
               <footer className="mt-2 text-sm font-semibold not-italic text-muted-foreground">
-                — Olusegun Ogundeji, Founder &amp; CEO
+                — Olusegun Ogundeji, Founder
               </footer>
             </blockquote>
           </div>
@@ -209,8 +209,7 @@ export default function AboutPage() {
             <div className="flex flex-col gap-4 text-[15px] text-foreground/80 leading-relaxed">
               <p>
                 Olusegun Joel Titus is a technology entrepreneur, blockchain researcher and PhD candidate in
-                Communication and Media Studies at Universitat Pompeu Fabra — the same institution where
-                WePollit&rsquo;s founder completed his doctorate.
+                Communication and Media Studies at Universitat Pompeu Fabra.
               </p>
               <p>
                 He is the founder of CafeRadar, a smart café discovery platform live on the App Store.
@@ -219,10 +218,6 @@ export default function AboutPage() {
                 deep expertise in emerging technology and product development to WePollit.
               </p>
             </div>
-          </div>
-
-          <div className="border border-dashed border-border rounded-2xl p-6 text-center text-sm text-muted-foreground">
-            More advisors coming soon.
           </div>
         </section>
 
