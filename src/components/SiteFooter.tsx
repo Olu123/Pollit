@@ -22,6 +22,8 @@ export default function SiteFooter() {
         <span aria-hidden>·</span>
         <Link href="/guidelines" className="hover:text-foreground transition-colors">Guidelines</Link>
         <span aria-hidden>·</span>
+        <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
+        <span aria-hidden>·</span>
         <Link href="/faq" className="hover:text-foreground transition-colors">FAQ</Link>
         <span aria-hidden>·</span>
         <Link href="/transparency" className="hover:text-foreground transition-colors">Transparency</Link>

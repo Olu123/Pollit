@@ -14,6 +14,7 @@ export const STRINGS = {
   'nav.logout':      { en: 'Sign out',    pid: 'Comot',        hau: 'Fita', yor: 'Jáde', ibo: 'Pụọ' },
   'nav.pulse':       { en: 'Pulse',       pid: 'Naija Pulse',  hau: 'Bugun Najeriya', yor: 'Ìró', ibo: 'Olu' },
   'nav.invite':      { en: 'Invite & Earn 🎁', pid: 'Invite & Earn 🎁', hau: 'Gayyata & Sami Kyauta 🎁', yor: 'Pè Kí O Jèrè 🎁', ibo: 'Kpọọ Ka Ị Nweta Ihe 🎁' },
+  'nav.about':       { en: 'About', pid: 'About Us', hau: 'Game da Mu', yor: 'Nípa Wa', ibo: 'Maka Anyị' },
   'nav.challenges':  { en: 'Challenges 🏆', pid: 'Challenges 🏆', hau: 'Ƙalubale 🏆', yor: 'Àwọn Ìdíje 🏆', ibo: 'Asọmpi 🏆' },
   'nav.signedInAs':  { en: 'Signed in as', pid: 'You enter as', hau: 'Kun shiga a matsayin', yor: 'O wọlé gẹ́gẹ́ bí', ibo: 'Ị banyere dịka' },
 

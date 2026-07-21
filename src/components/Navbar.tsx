@@ -203,6 +203,17 @@ export default function Navbar() {
               {t(key)}
             </Link>
           ))}
+          <Link
+            href="/about"
+            onClick={() => setOpen(false)}
+            className={`flex items-center text-sm font-medium px-3 py-3.5 rounded-xl transition-colors ${
+              pathname === '/about'
+                ? 'text-primary bg-primary-light'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            {t('nav.about')}
+          </Link>
           {user ? (
             <>
               {displayName && (
