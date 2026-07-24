@@ -19,6 +19,7 @@ import { useCommentsFeed } from '@/lib/voting/useCommentsFeed'
 import ResultsBars from './voting/ResultsBars'
 import ChallengeBanner from './voting/ChallengeBanner'
 import CommentsFeed from './voting/CommentsFeed'
+import NigerianVerdict from './NigerianVerdict'
 import VoteOptionsForm from './voting/VoteOptionsForm'
 import EditableQuestion from './voting/EditableQuestion'
 
@@ -602,6 +603,16 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           {guestVoteError}
         </p>
       )}
+
+      {/* 🇳🇬 Nigerian Verdict — only once a poll has enough votes to be citable */}
+      <NigerianVerdict
+        pollId={poll.id}
+        question={poll.question}
+        options={poll.options}
+        totalVotes={total}
+        category={poll.category}
+        createdAt={poll.created_at}
+      />
 
       {/* Comments feed */}
       <CommentsFeed comments={comments} onReload={reloadComments} />

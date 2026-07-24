@@ -28,4 +28,7 @@ export const shareMessages = {
 
   myCard: () =>
     `See my Nigerian identity on WePollit! What's yours? 👉 ${SITE_DOMAIN}`,
+
+  verdict: (id: string, statement: string, question: string, citation: string) =>
+    `🇳🇬 The Nigerian Verdict:\n${statement}\n\nPoll: ${question}\n${citation}\n\nSee full results: ${url(id)}\n#WePollit #NigerianVerdict`,
 }
