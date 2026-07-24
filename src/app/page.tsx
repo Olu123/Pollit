@@ -120,9 +120,9 @@ export default async function HomePage({
         <Stat icon={<Users size={15} className="text-primary" strokeWidth={2.5} />} value={fmt(totals.userCount)} label={<T k="home.statUsers" />} />
       </div>
 
-      {/* 🔥 Hot Takes row */}
+      {/* 🔥 Hot Takes row — hidden on mobile to keep the homepage focused; still shown from md: up */}
       {hotTakes.length > 0 && (
-        <section className="flex flex-col gap-3">
+        <section className="hidden md:flex flex-col gap-3">
           <h2 className="text-lg font-black text-foreground flex items-center gap-2">
             <T k="home.hotTakes" />
           </h2>

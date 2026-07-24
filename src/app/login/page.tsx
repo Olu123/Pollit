@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
-  BarChart2, Eye, EyeOff, ArrowRight, RotateCcw,
+  BarChart2, Eye, EyeOff, ArrowRight, ArrowLeft,
   Mail, Phone, Globe,
 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -47,14 +48,33 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [info,  setInfo]  = useState('')
   const [captchaToken, setCaptchaToken] = useState('')
+  const [oauthError, setOauthError] = useState(false)
+  const tabBarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!loading && user) router.replace('/')
   }, [user, loading, router])
 
+  // Landed here after a failed OAuth redirect (see auth/callback/page.tsx) —
+  // surface it clearly instead of leaving the user wondering what happened,
+  // and point them at the other sign-in options rather than just Google.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'oauth_failed') {
+      setTab('social')
+      setOauthError(true)
+      setError('Could not sign you in with that provider.')
+      router.replace('/login')
+    }
+  }, [router])
+
   function reset() { setError(''); setInfo('') }
 
-  function switchTab(t: Tab) { setTab(t); reset() }
+  function switchTab(t: Tab) { setTab(t); setOauthError(false); reset() }
+
+  function scrollToTabs() {
+    tabBarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   // ── Social ─────────────────────────────────────────────────────
   async function handleOAuth(provider: 'google' | 'facebook' | 'x') {
@@ -153,6 +173,14 @@ export default function LoginPage() {
     <main className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
 
+        {/* Back / escape hatch — never trap the user on this page */}
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors mb-4"
+        >
+          <ArrowLeft size={15} /> Back to WePollit
+        </Link>
+
         {/* Logo */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-[#DC2626] to-[#b91c1c] rounded-3xl flex items-center justify-center shadow-xl shadow-[#DC2626]/20">
@@ -168,7 +196,7 @@ export default function LoginPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex bg-muted rounded-xl p-1 mb-4 gap-1">
+        <div ref={tabBarRef} className="flex bg-muted rounded-xl p-1 mb-4 gap-1">
           {(
             [
               ['social', <Globe key="g" size={13} />,  'Social'],
@@ -195,6 +223,9 @@ export default function LoginPage() {
           {/* ── Social tab ─────────────────────────────────────── */}
           {tab === 'social' && (
             <>
+              {oauthError && (
+                <p className="text-sm font-semibold text-foreground -mb-1">Try another method:</p>
+              )}
               <button
                 onClick={() => handleOAuth('google')}
                 disabled={busy}
@@ -463,12 +494,21 @@ export default function LoginPage() {
                     onClick={() => { setPhoneStep('input'); setOtp(''); reset() }}
                     className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
                   >
-                    <RotateCcw size={12} /> Resend / change number
+                    <ArrowLeft size={12} /> Change number
                   </button>
                 </>
               )}
             </>
           )}
+
+          {/* Escape hatch — always available, scrolls the tab bar back into
+              view (useful when the mobile keyboard has pushed it off-screen) */}
+          <button
+            onClick={scrollToTabs}
+            className="text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Try a different method
+          </button>
 
           {/* Error / info banners */}
           {error && (

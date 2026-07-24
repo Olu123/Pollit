@@ -9,6 +9,7 @@ import { useAuth } from './AuthProvider'
 import { useLanguage } from './LanguageProvider'
 import { getAccountAgeHours } from '@/lib/accountAge'
 import LanguageToggle from './LanguageToggle'
+import MobileLanguageMenu from './MobileLanguageMenu'
 import type { StringKey } from '@/lib/i18n'
 
 const NAV_LINKS: { href: string; key: StringKey }[] = [
@@ -171,6 +172,7 @@ export default function Navbar() {
           >
             <Plus size={19} strokeWidth={2.5} />
           </Link>
+          <MobileLanguageMenu />
           <button
             className="flex items-center justify-center w-11 h-11 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted transition-colors"
             onClick={() => setOpen((v) => !v)}
@@ -185,10 +187,6 @@ export default function Navbar() {
       {/* Mobile drawer */}
       {open && (
         <div className="md:hidden border-t border-border bg-card px-4 py-2 flex flex-col">
-          <div className="flex justify-between items-center px-3 py-2">
-            <span className="text-xs text-muted-foreground">Language</span>
-            <LanguageToggle />
-          </div>
           {NAV_LINKS.map(({ href, key }) => (
             <Link
               key={href}

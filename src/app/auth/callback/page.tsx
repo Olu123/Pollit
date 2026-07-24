@@ -15,7 +15,7 @@ export default function AuthCallbackPage() {
 
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) { router.replace('/login'); return }
+        if (error) { router.replace('/login?error=oauth_failed'); return }
         // Password reset flow — send to the reset form
         if (type === 'recovery') {
           router.replace('/auth/reset')
@@ -23,6 +23,12 @@ export default function AuthCallbackPage() {
           router.replace('/')
         }
       })
+    } else if (params.get('error')) {
+      // The provider (Google/Facebook/X) sent us back with an error instead
+      // of a code (e.g. the user denied the permission request) — route
+      // back to login with a friendly flag rather than silently landing on
+      // the homepage with no explanation.
+      router.replace('/login?error=oauth_failed')
     } else {
       router.replace('/')
     }
