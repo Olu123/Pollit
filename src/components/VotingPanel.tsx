@@ -22,6 +22,7 @@ import CommentsFeed from './voting/CommentsFeed'
 import NigerianVerdict from './NigerianVerdict'
 import VoteOptionsForm from './voting/VoteOptionsForm'
 import EditableQuestion from './voting/EditableQuestion'
+import ManagePoll from './voting/ManagePoll'
 
 function timeRemaining(expiresAt: string) {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -483,6 +484,17 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
           isGuest={!user}
         />
       )}
+
+      {/* Manage Your Poll — creator-only extend controls */}
+      <ManagePoll
+        poll={poll}
+        isCreator={isCreator}
+        onExtended={(newExpiresAt) => setPoll((prev) => ({
+          ...prev,
+          expires_at: newExpiresAt,
+          extension_count: prev.extension_count + 1,
+        }))}
+      />
 
       {/* Voted confirmation */}
       {votedOptionId && (

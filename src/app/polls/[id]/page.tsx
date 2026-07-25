@@ -20,6 +20,7 @@ const POLL_SELECT = `
   id, question, category, created_by, expires_at, total_votes, is_hot_take,
   is_community, community_name, community_code, community_password, created_at,
   is_challenge, challenge_pool, challenge_status, challenge_distributed, image_url,
+  extension_count, original_expires_at,
   profile:profiles!created_by ( id, username, avatar_url ),
   options:poll_options ( id, poll_id, text, vote_count, display_order, created_at )
 `

@@ -67,6 +67,8 @@ export default function ProfilePage() {
   const [phone, setPhone]         = useState('')
   const [bio, setBio]             = useState('')
   const [newsletter, setNewsletter] = useState(false)
+  const [notifyDailySummary, setNotifyDailySummary]   = useState(true)
+  const [notifyExpiryReminder, setNotifyExpiryReminder] = useState(true)
 
   // Read-only / derived
   const [stats, setStats]   = useState<Stats>({ points: 0, pollsCreated: 0, votesCast: 0 })
@@ -104,6 +106,8 @@ export default function ProfilePage() {
       setPhone(profile.phone ?? '')
       setBio(profile.bio ?? '')
       setNewsletter(!!profile.newsletter_opt_in)
+      setNotifyDailySummary(profile.notify_daily_summary !== false)
+      setNotifyExpiryReminder(profile.notify_expiry_reminder !== false)
       setStats({
         points:       profile.points ?? 0,
         pollsCreated: polls.count ?? 0,
@@ -140,6 +144,8 @@ if (!cleanUsername) {
         phone:       phone.trim() || null,
         bio:         sanitizeText(bio).slice(0, 160) || null,
         newsletter_opt_in: newsletter,
+        notify_daily_summary: notifyDailySummary,
+        notify_expiry_reminder: notifyExpiryReminder,
         updated_at:  new Date().toISOString(),
       })
       .eq('id', user!.id)
@@ -347,6 +353,41 @@ if (!cleanUsername) {
             </span>
           </span>
         </label>
+
+        {/* Poll creator notification preferences */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-foreground">📧 Email Notifications</p>
+
+          <label className="flex items-start gap-3 border border-border rounded-xl px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={notifyDailySummary}
+              onChange={(e) => setNotifyDailySummary(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC2626]"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">Daily poll activity summary</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Sent only when your polls have activity.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 border border-border rounded-xl px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={notifyExpiryReminder}
+              onChange={(e) => setNotifyExpiryReminder(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC2626]"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">Poll expiry reminder</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                24 hours before your poll closes.
+              </span>
+            </span>
+          </label>
+        </div>
 
         </fieldset>
 

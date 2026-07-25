@@ -19,8 +19,11 @@ interface AdminPoll {
   deleted_at: string | null
   created_at: string
   expires_at: string
+  extension_count: number
   creator_username: string | null
 }
+
+const EXTEND_PRESETS = [1, 3, 7, 30] as const
 
 const CATEGORIES = ['All', 'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle']
 
@@ -43,7 +46,7 @@ export default function AdminPollsPage() {
       .select(`
         id, question, category, total_votes, is_hot_take, is_pinned,
         is_community, is_challenge, challenge_pool, challenge_status, challenge_distributed,
-        deleted_at, created_at, expires_at,
+        deleted_at, created_at, expires_at, extension_count,
         profile:profiles!created_by ( username )
       `)
       .order('created_at', { ascending: false })
@@ -77,6 +80,23 @@ export default function AdminPollsPage() {
     await supabase.rpc(fn, params)
     setBusy(null)
     showToast(msg)
+    load()
+  }
+
+  async function extendPoll(pollId: string, days: number) {
+    setBusy(pollId)
+    const { data, error } = await supabase.rpc('extend_poll', { p_poll_id: pollId, p_days: days })
+    setBusy(null)
+    if (error) {
+      showToast("Couldn't extend poll.")
+      return
+    }
+    const newExpiresAt = (data as { new_expires_at?: string } | null)?.new_expires_at
+    showToast(
+      newExpiresAt
+        ? `Poll extended to ${new Date(newExpiresAt).toLocaleString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+        : 'Poll extended.'
+    )
     load()
   }
 
@@ -177,6 +197,7 @@ export default function AdminPollsPage() {
                                   Distribute 🏆
                                 </Btn>
                               )}
+                              <ExtendControl pollId={p.id} busy={isBusy} onExtend={(days) => extendPoll(p.id, days)} />
                               <Btn disabled={isBusy} color="red" onClick={() => rpc('admin_delete_poll', { p_poll_id: p.id }, 'Poll deleted.', p.id)}>Delete</Btn>
                             </>
                           )}
@@ -212,6 +233,43 @@ function Badge({ color, children }: { color: string; children: React.ReactNode }
     green:  'bg-green-100 text-green-700',
   }
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls[color] ?? ''}`}>{children}</span>
+}
+
+function ExtendControl({ pollId, busy, onExtend }: {
+  pollId: string; busy: boolean; onExtend: (days: number) => void
+}) {
+  const [choice, setChoice] = useState<string>('1')
+  const [custom, setCustom] = useState('')
+  const isCustom = choice === 'custom'
+  const days = isCustom ? Number(custom) : Number(choice)
+  const valid = Number.isFinite(days) && days > 0 && days <= 365
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={choice}
+        onChange={(e) => setChoice(e.target.value)}
+        disabled={busy}
+        className="text-xs border border-border rounded-lg px-1.5 py-1.5 bg-transparent outline-none"
+      >
+        {EXTEND_PRESETS.map((d) => <option key={d} value={d}>+{d}d</option>)}
+        <option value="custom">Custom…</option>
+      </select>
+      {isCustom && (
+        <input
+          type="number"
+          min={1}
+          max={365}
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="days"
+          disabled={busy}
+          className="w-14 text-xs border border-border rounded-lg px-1.5 py-1.5 bg-transparent outline-none"
+        />
+      )}
+      <Btn disabled={busy || !valid} onClick={() => onExtend(days)}>Extend</Btn>
+    </div>
+  )
 }
 
 function Btn({ onClick, disabled, color = 'default', children }: {

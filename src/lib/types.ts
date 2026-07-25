@@ -19,6 +19,8 @@ export interface Profile {
   bio: string | null
   state_of_origin: string | null
   newsletter_opt_in: boolean
+  notify_daily_summary: boolean
+  notify_expiry_reminder: boolean
   referred_by: string | null
   referral_count: number
   is_admin: boolean
@@ -58,6 +60,8 @@ export interface Poll {
   deleted_at: string | null
   created_at: string
   image_url: string | null
+  extension_count: number
+  original_expires_at: string | null
   profile: Profile | null
   options: PollOption[]
 }

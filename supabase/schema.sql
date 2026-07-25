@@ -2721,3 +2721,107 @@ begin
   return v_poll_id;
 end;
 $$;
+
+-- ══════════════════════════════════════════════════════════════
+-- Poll creator notifications: daily activity summary, 24h expiry
+-- reminder, poll extensions, and per-user notification preferences.
+-- ══════════════════════════════════════════════════════════════
+
+-- ── New columns ──────────────────────────────────────────────
+
+alter table public.polls
+  add column if not exists expiry_reminder_sent boolean default false,
+  add column if not exists extension_count      integer default 0,
+  add column if not exists original_expires_at   timestamptz;
+
+alter table public.profiles
+  add column if not exists notify_daily_summary   boolean default true,
+  add column if not exists notify_expiry_reminder  boolean default true;
+
+create index if not exists polls_expiry_reminder_idx
+  on public.polls(expires_at) where expiry_reminder_sent = false;
+
+-- ── RPC: extend_poll ─────────────────────────────────────────
+-- Lets a poll's creator (or an admin) push its expiry back. Regular
+-- creators are capped at 2 extensions and a fixed set of day counts;
+-- admins are exempt from both the cap and the fixed-day-count list
+-- (bounded to 1-365 days) so they can grant arbitrary extensions from
+-- the admin panel.
+create or replace function public.extend_poll(
+  p_poll_id uuid,
+  p_days    integer
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid      uuid := auth.uid();
+  v_poll     polls%rowtype;
+  v_is_admin boolean;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_poll from polls where id = p_poll_id;
+  if not found then
+    raise exception 'poll_not_found';
+  end if;
+
+  select exists (
+    select 1 from profiles where id = v_uid and is_admin = true
+  ) into v_is_admin;
+
+  -- Only creator or admin can extend
+  if v_poll.created_by != v_uid and not v_is_admin then
+    raise exception 'not_authorized';
+  end if;
+
+  -- Max 2 extensions (admins exempt)
+  if v_poll.extension_count >= 2 and not v_is_admin then
+    raise exception 'max_extensions_reached';
+  end if;
+
+  -- Cannot extend ended polls (admins can override)
+  if v_poll.expires_at < now() and not v_is_admin then
+    raise exception 'poll_already_ended';
+  end if;
+
+  -- Validate days: fixed set for regular creators, 1-365 for admins
+  if p_days not in (1, 3, 7, 30) and not v_is_admin then
+    raise exception 'invalid_extension_days';
+  end if;
+  if p_days < 1 or p_days > 365 then
+    raise exception 'invalid_extension_days';
+  end if;
+
+  update polls set
+    original_expires_at = coalesce(original_expires_at, expires_at),
+    expires_at           = expires_at + (p_days || ' days')::interval,
+    extension_count      = extension_count + 1,
+    expiry_reminder_sent = false,
+    challenge_status     = case when is_challenge then 'active' else challenge_status end
+  where id = p_poll_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'new_expires_at', (select expires_at from polls where id = p_poll_id),
+    'extensions_remaining', greatest(0, 2 - (v_poll.extension_count + 1))
+  );
+end;
+$$;
+grant execute on function public.extend_poll(uuid, integer) to authenticated;
+
+-- ── RPC: cron_get_user_emails ────────────────────────────────
+-- Resolves poll creators' emails from auth.users for the daily-summary
+-- and expiry-reminder cron routes. Those routes run with no end-user
+-- session (triggered by Vercel Cron / CRON_SECRET), so this is granted
+-- only to service_role — never to anon/authenticated — and skips the
+-- auth.uid() admin check that public.admin_get_user_emails uses (which
+-- would always fail here since there's no signed-in caller).
+create or replace function public.cron_get_user_emails(p_user_ids uuid[])
+returns table(id uuid, email text)
+language sql stable security definer set search_path = public as $$
+  select u.id, u.email from auth.users u where u.id = any(p_user_ids);
+$$;
+grant execute on function public.cron_get_user_emails(uuid[]) to service_role;
