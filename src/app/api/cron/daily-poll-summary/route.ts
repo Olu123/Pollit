@@ -7,6 +7,7 @@ import { notificationUnsubscribeUrl } from '@/lib/notifications'
 import { SITE_URL } from '@/lib/site'
 
 // Runs daily at 07:00 UTC (08:00 WAT) — see vercel.json.
+// (Redeploy trigger: previous push didn't produce a Vercel production build.)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
