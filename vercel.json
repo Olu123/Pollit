@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/daily-poll-summary",
       "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/poll-expiry-reminder",
-      "schedule": "0 * * * *"
     }
   ]
 }
