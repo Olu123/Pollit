@@ -2911,3 +2911,481 @@ language sql stable security definer set search_path = public as $$
   select u.id, u.email from auth.users u where u.id = any(p_user_ids);
 $$;
 grant execute on function public.cron_get_user_emails(uuid[]) to service_role;
+
+-- ══════════════════════════════════════════════════════════════
+-- Role-based admin permissions + temporary token access windows
+-- ══════════════════════════════════════════════════════════════
+--
+-- Three tiers, stored in profiles.admin_role:
+--   super_admin — unrestricted (today's is_admin behavior).
+--   moderator   — flags/reports/suspensions/poll moderation only.
+--   support     — read-only, plus token adjustments while a
+--                 super_admin-granted window is open.
+--
+-- is_admin is kept as the coarse "has some admin role" flag (existing
+-- RLS/UI checks key off it), admin_role adds the tier on top of it.
+
+alter table public.profiles
+  add column if not exists admin_role text default null,
+  add column if not exists token_permission_expires_at timestamptz default null;
+
+alter table public.profiles drop constraint if exists profiles_admin_role_check;
+alter table public.profiles add constraint profiles_admin_role_check
+  check (admin_role is null or admin_role in ('super_admin', 'moderator', 'support'));
+
+-- Backfill: today's admins keep full access under the new model.
+update public.profiles set admin_role = 'super_admin' where is_admin = true and admin_role is null;
+
+-- ── Self-elevation guard ───────────────────────────────────────
+-- profiles_update (auth.uid() = id, no column restriction) otherwise lets
+-- any signed-in user grant themselves admin by updating their own row
+-- directly. This trigger blocks changes to the three admin-permission
+-- columns unless the transaction explicitly opts in via the bypass
+-- flag, which only the RPCs below set (right before the update they're
+-- trusted to make).
+create or replace function public.guard_profile_admin_columns()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_setting('app.bypass_profile_admin_guard', true) = 'true' then
+    return new;
+  end if;
+  if new.is_admin is distinct from old.is_admin
+     or new.admin_role is distinct from old.admin_role
+     or new.token_permission_expires_at is distinct from old.token_permission_expires_at
+  then
+    raise exception 'protected_column_change_forbidden';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_guard_admin_columns on public.profiles;
+create trigger profiles_guard_admin_columns
+  before update on public.profiles
+  for each row execute function public.guard_profile_admin_columns();
+
+-- ── Helper: role checks ────────────────────────────────────────
+create or replace function public.has_admin_role(p_uid uuid, p_roles text[])
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from profiles
+    where id = p_uid and is_admin = true and admin_role = any(p_roles)
+  );
+$$;
+grant execute on function public.has_admin_role(uuid, text[]) to authenticated;
+
+-- ── Helper: temporary token access window ─────────────────────
+-- super_admin can always adjust tokens; support only while a
+-- super_admin-granted window is open (token_permission_expires_at in
+-- the future). moderator never gets this, by design.
+create or replace function public.can_adjust_tokens(p_uid uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from profiles
+    where id = p_uid and is_admin = true and (
+      admin_role = 'super_admin'
+      or (admin_role = 'support' and token_permission_expires_at is not null and now() < token_permission_expires_at)
+    )
+  );
+$$;
+grant execute on function public.can_adjust_tokens(uuid) to authenticated;
+
+-- ── RPC: admin_set_role ────────────────────────────────────────
+-- super_admin only. Setting a role always clears any existing token
+-- window — a role change should never carry an old grant forward.
+create or replace function public.admin_set_role(p_user_id uuid, p_role text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare v_uid uuid := auth.uid();
+begin
+  if not public.has_admin_role(v_uid, array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+  if p_user_id = v_uid then
+    raise exception 'cannot_modify_self';
+  end if;
+  if p_role is not null and p_role not in ('super_admin', 'moderator', 'support') then
+    raise exception 'invalid_role';
+  end if;
+
+  perform set_config('app.bypass_profile_admin_guard', 'true', true);
+  update profiles
+     set admin_role = p_role,
+         is_admin   = (p_role is not null),
+         token_permission_expires_at = null
+   where id = p_user_id;
+
+  return jsonb_build_object('success', true, 'admin_role', p_role);
+end;
+$$;
+grant execute on function public.admin_set_role(uuid, text) to authenticated;
+
+-- ── RPC: admin_grant_token_window ──────────────────────────────
+-- super_admin only. Opens a time-boxed token-adjustment window for a
+-- support (or super_admin) user. Capped at 1 week to keep grants
+-- genuinely temporary.
+create or replace function public.admin_grant_token_window(p_user_id uuid, p_hours integer)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare v_uid uuid := auth.uid(); v_target_role text; v_expires timestamptz;
+begin
+  if not public.has_admin_role(v_uid, array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+  if p_hours is null or p_hours <= 0 or p_hours > 168 then
+    raise exception 'invalid_window_hours';
+  end if;
+
+  select admin_role into v_target_role from profiles where id = p_user_id;
+  if v_target_role is distinct from 'support' and v_target_role is distinct from 'super_admin' then
+    raise exception 'target_not_eligible';
+  end if;
+
+  v_expires := now() + (p_hours || ' hours')::interval;
+
+  perform set_config('app.bypass_profile_admin_guard', 'true', true);
+  update profiles set token_permission_expires_at = v_expires where id = p_user_id;
+
+  return jsonb_build_object('success', true, 'expires_at', v_expires);
+end;
+$$;
+grant execute on function public.admin_grant_token_window(uuid, integer) to authenticated;
+
+-- ── RPC: admin_revoke_token_window ─────────────────────────────
+create or replace function public.admin_revoke_token_window(p_user_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare v_uid uuid := auth.uid();
+begin
+  if not public.has_admin_role(v_uid, array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+
+  perform set_config('app.bypass_profile_admin_guard', 'true', true);
+  update profiles set token_permission_expires_at = null where id = p_user_id;
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+grant execute on function public.admin_revoke_token_window(uuid) to authenticated;
+
+-- ── admin_toggle_admin — now super_admin-only, syncs admin_role ──
+-- Kept (rather than removed) since it's additive-schema history; the
+-- admin UI now drives role changes through admin_set_role instead.
+create or replace function public.admin_toggle_admin(p_user_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not public.has_admin_role(v_uid, array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+  if p_user_id = v_uid then raise exception 'cannot_modify_self'; end if;
+
+  perform set_config('app.bypass_profile_admin_guard', 'true', true);
+  update profiles
+     set is_admin = not coalesce(is_admin, false),
+         admin_role = case when coalesce(is_admin, false) then null else coalesce(admin_role, 'super_admin') end,
+         token_permission_expires_at = case when coalesce(is_admin, false) then null else token_permission_expires_at end
+   where id = p_user_id
+   returning is_admin into v_new;
+
+  return jsonb_build_object('success', true, 'is_admin', v_new);
+end; $$;
+grant execute on function public.admin_toggle_admin(uuid) to authenticated;
+
+-- ── Trust & safety RPCs — super_admin + moderator ────────────────
+create or replace function public.admin_suspend_user(p_user_id uuid, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set is_suspended = true where id = p_user_id;
+  insert into suspensions (user_id, reason, suspended_by) values (p_user_id, p_reason, v_uid);
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_suspend_user(uuid, text) to authenticated;
+
+create or replace function public.admin_unsuspend_user(p_user_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set is_suspended = false where id = p_user_id;
+  update suspensions set lifted_at = now() where user_id = p_user_id and lifted_at is null;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_unsuspend_user(uuid) to authenticated;
+
+create or replace function public.admin_delete_poll(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set deleted_at = now() where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_delete_poll(uuid) to authenticated;
+
+create or replace function public.admin_restore_poll(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set deleted_at = null where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_restore_poll(uuid) to authenticated;
+
+create or replace function public.admin_toggle_pin(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_pinned = not coalesce(is_pinned, false)
+  where id = p_poll_id returning is_pinned into v_new;
+  return jsonb_build_object('success', true, 'is_pinned', v_new);
+end; $$;
+grant execute on function public.admin_toggle_pin(uuid) to authenticated;
+
+create or replace function public.admin_toggle_hot_take(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_new boolean; begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_hot_take = not coalesce(is_hot_take, false)
+  where id = p_poll_id returning is_hot_take into v_new;
+  return jsonb_build_object('success', true, 'is_hot_take', v_new);
+end; $$;
+grant execute on function public.admin_toggle_hot_take(uuid) to authenticated;
+
+create or replace function public.admin_dismiss_report(p_report_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update reports set status = 'dismissed' where id = p_report_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_dismiss_report(uuid) to authenticated;
+
+create or replace function public.admin_resolve_flag(p_flag_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update suspicious_flags
+     set resolved = true, resolved_by = v_uid, resolved_at = now()
+   where id = p_flag_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_resolve_flag(uuid) to authenticated;
+
+create or replace function public.admin_warn_user(p_user_id uuid, p_note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles
+     set admin_notes = concat_ws(E'\n',
+           nullif(admin_notes, ''),
+           to_char(now(), 'YYYY-MM-DD HH24:MI') || ' — ' || coalesce(nullif(btrim(p_note), ''), 'Warning issued'))
+   where id = p_user_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_warn_user(uuid, text) to authenticated;
+
+create or replace function public.admin_clear_poll_flag(p_poll_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.has_admin_role(v_uid, array['super_admin', 'moderator']) then
+    raise exception 'not_authorized';
+  end if;
+  update polls set is_flagged = false where id = p_poll_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_clear_poll_flag(uuid) to authenticated;
+
+-- ── admin_adjust_tokens — gated by the temporary token window ────
+create or replace function public.admin_adjust_tokens(p_user_id uuid, p_amount integer, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); begin
+  if not public.can_adjust_tokens(v_uid) then
+    raise exception 'not_authorized';
+  end if;
+  update profiles set points = points + p_amount, updated_at = now() where id = p_user_id;
+  insert into token_transactions (user_id, username, amount, reason, reason_type, created_by)
+  select p_user_id, p.username, p_amount, p_reason, 'admin_adjustment', v_uid
+  from profiles p where p.id = p_user_id;
+  return jsonb_build_object('success', true);
+end; $$;
+grant execute on function public.admin_adjust_tokens(uuid, integer, text) to authenticated;
+
+-- ── super_admin-only RPCs (PII / money / growth toggles) ─────────
+create or replace function public.admin_get_user_emails(p_user_ids uuid[])
+returns table(id uuid, email text)
+language sql stable security definer set search_path = public as $$
+  select u.id, u.email
+  from auth.users u
+  where u.id = any(p_user_ids)
+    and public.has_admin_role(auth.uid(), array['super_admin']);
+$$;
+grant execute on function public.admin_get_user_emails(uuid[]) to authenticated;
+
+create or replace function public.admin_distribute_monthly_prize(
+  p_month int default extract(month from now())::int,
+  p_year  int default extract(year from now())::int
+)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_uid      uuid := auth.uid();
+  v_existing public.monthly_prizes%rowtype;
+  v_tiers    integer[] := array[20000,10000,7000,5000,3000,500,500,500,500,500];
+  v_row      record;
+  v_winners  jsonb := '[]'::jsonb;
+  v_rank     int := 1;
+  v_prize    integer;
+begin
+  if not public.has_admin_role(v_uid, array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+
+  select * into v_existing from monthly_prizes where month = p_month and year = p_year;
+  if v_existing.status = 'distributed' then
+    raise exception 'already_distributed';
+  end if;
+
+  for v_row in select * from public.monthly_leaderboard(p_month, p_year) loop
+    v_prize := v_tiers[v_rank];
+
+    v_winners := v_winners || jsonb_build_object(
+      'rank', v_rank, 'user_id', v_row.user_id, 'username', v_row.username,
+      'prize_ngn', v_prize
+    );
+    v_rank := v_rank + 1;
+  end loop;
+
+  insert into monthly_prizes (month, year, status, winners, distributed_at)
+  values (p_month, p_year, 'distributed', v_winners, now())
+  on conflict (month, year) do update
+    set status = 'distributed', winners = v_winners, distributed_at = now();
+
+  return jsonb_build_object('success', true, 'winners', v_winners);
+end;
+$$;
+grant execute on function public.admin_distribute_monthly_prize(int, int) to authenticated;
+
+create or replace function public.admin_set_ambassador(p_user_id uuid, p_is_ambassador boolean, p_university text default null)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.has_admin_role(auth.uid(), array['super_admin']) then
+    raise exception 'not_authorized';
+  end if;
+
+  update profiles
+    set is_ambassador         = p_is_ambassador,
+        ambassador_university = case when p_is_ambassador then p_university else null end
+    where id = p_user_id;
+end;
+$$;
+grant execute on function public.admin_set_ambassador(uuid, boolean, text) to authenticated;
+
+-- ── admin_get_users — read access for any admin role ─────────────
+-- The previous version had no auth check at all (any authenticated
+-- caller could read every user's email); this closes that gap and
+-- surfaces the new role/window columns for the admin UI.
+create or replace function public.admin_get_users()
+returns table(
+  id                           uuid,
+  username                     text,
+  email                        text,
+  points                       integer,
+  is_admin                     boolean,
+  is_suspended                 boolean,
+  is_ambassador                boolean,
+  ambassador_university        text,
+  admin_role                   text,
+  token_permission_expires_at  timestamptz,
+  created_at                   timestamptz,
+  poll_count                   bigint,
+  vote_count                   bigint
+)
+language sql security definer set search_path = public
+as $$
+  select
+    p.id,
+    p.username,
+    coalesce(u.email, '') as email,
+    p.points,
+    coalesce(p.is_admin, false),
+    coalesce(p.is_suspended, false),
+    coalesce(p.is_ambassador, false),
+    p.ambassador_university,
+    p.admin_role,
+    p.token_permission_expires_at,
+    p.created_at,
+    (select count(*) from polls where created_by = p.id and deleted_at is null)::bigint,
+    (select count(*) from votes where user_id = p.id)::bigint
+  from public.profiles p
+  left join auth.users u on u.id = p.id
+  where exists (select 1 from profiles a where a.id = auth.uid() and a.is_admin = true)
+  order by p.created_at desc;
+$$;
+grant execute on function public.admin_get_users() to authenticated;
+
+-- ── RLS: narrow the "any admin" blanket grants used by role-gated
+-- tables, so a support/moderator session can't bypass the RPC-level
+-- checks above via direct REST calls to these tables. Every write to
+-- these tables already goes exclusively through the RPCs above (which
+-- run as table owner and bypass RLS) — so the policies below only need
+-- to cover read access plus the equivalent role check for defense in
+-- depth if a client ever calls the table directly.
+--
+-- token_transactions is deliberately excluded here: it was redesigned
+-- above (see "public read, authenticated insert, never delete") into a
+-- public transparency ledger — transactions_public_read (select using
+-- true) and transactions_insert (any authenticated user) already exist
+-- and are more permissive than anything role-based added here could
+-- restrict. That's an intentional pre-existing tradeoff, not a gap
+-- introduced by this feature: a forged direct insert can't move real
+-- balances, since profiles.points is only ever changed by the RPCs
+-- above, which do enforce can_adjust_tokens().
+
+drop policy if exists "suspensions_admin_all" on public.suspensions;
+create policy "suspensions_admin_read" on public.suspensions for select using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+create policy "suspensions_admin_insert" on public.suspensions for insert with check (
+  public.has_admin_role(auth.uid(), array['super_admin', 'moderator'])
+);
+create policy "suspensions_admin_update" on public.suspensions for update using (
+  public.has_admin_role(auth.uid(), array['super_admin', 'moderator'])
+);
+
+drop policy if exists "admins_manage_flags" on public.suspicious_flags;
+create policy "flags_admin_read" on public.suspicious_flags for select using (
+  exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
+create policy "flags_admin_update" on public.suspicious_flags for update using (
+  public.has_admin_role(auth.uid(), array['super_admin', 'moderator'])
+);

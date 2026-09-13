@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Loader2, Search, Trophy } from 'lucide-react'
+import { Loader2, Search, Trophy, Lock } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
+import { canAdjustTokensNow, canAssignRoles } from '@/lib/adminPermissions'
 
 interface Transaction {
   id: string
@@ -28,6 +30,10 @@ const EARN_RATES = [
 ]
 
 export default function AdminTokensPage() {
+  const { profile } = useAuth()
+  const iCanAdjustTokensNow = canAdjustTokensNow(profile)
+  const iCanDistributePrize = canAssignRoles(profile)
+
   const [txns,      setTxns]      = useState<Transaction[]>([])
   const [loading,   setLoading]   = useState(true)
   const [userSearch, setUserSearch] = useState('')
@@ -157,57 +163,66 @@ export default function AdminTokensPage() {
         <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
           <p className="text-sm font-bold text-foreground">Manual Adjustment</p>
 
-          {/* User search */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Search user</label>
-            {selectedUser ? (
-              <div className="flex items-center justify-between bg-muted rounded-xl px-3 py-2">
-                <span className="text-sm font-semibold text-foreground">@{selectedUser.username}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{selectedUser.points} tokens</span>
-                  <button onClick={() => { setSelectedUser(null); setUserSearch(''); setUserResults([]) }}
-                    className="text-muted-foreground hover:text-foreground text-xs">✕</button>
-                </div>
-              </div>
-            ) : (
-              <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input value={userSearch}
-                  onChange={e => { setUserSearch(e.target.value); searchUsers(e.target.value) }}
-                  placeholder="Username…"
-                  className="w-full border border-border rounded-xl pl-8 pr-3 py-2 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
-                {userResults.length > 0 && (
-                  <div className="absolute top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden">
-                    {userResults.map(u => (
-                      <button key={u.id} onClick={() => { setSelectedUser(u); setUserSearch(''); setUserResults([]) }}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-muted transition-colors text-left">
-                        <span className="font-medium">@{u.username}</span>
-                        <span className="text-xs text-muted-foreground">{u.points} tokens</span>
-                      </button>
-                    ))}
+          {!iCanAdjustTokensNow && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2.5">
+              <Lock size={12} className="shrink-0" />
+              You don&rsquo;t have an active token access window. Ask a super admin to grant one from /admin/users.
+            </p>
+          )}
+
+          <div className={`flex flex-col gap-3 ${!iCanAdjustTokensNow ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* User search */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Search user</label>
+              {selectedUser ? (
+                <div className="flex items-center justify-between bg-muted rounded-xl px-3 py-2">
+                  <span className="text-sm font-semibold text-foreground">@{selectedUser.username}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{selectedUser.points} tokens</span>
+                    <button onClick={() => { setSelectedUser(null); setUserSearch(''); setUserResults([]) }}
+                      className="text-muted-foreground hover:text-foreground text-xs">✕</button>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input value={userSearch}
+                    onChange={e => { setUserSearch(e.target.value); searchUsers(e.target.value) }}
+                    placeholder="Username…"
+                    className="w-full border border-border rounded-xl pl-8 pr-3 py-2 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
+                  {userResults.length > 0 && (
+                    <div className="absolute top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden">
+                      {userResults.map(u => (
+                        <button key={u.id} onClick={() => { setSelectedUser(u); setUserSearch(''); setUserResults([]) }}
+                          className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-muted transition-colors text-left">
+                          <span className="font-medium">@{u.username}</span>
+                          <span className="text-xs text-muted-foreground">{u.points} tokens</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Amount (negative to deduct)</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 100 or -50"
-              className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
-          </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Amount (negative to deduct)</label>
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 100 or -50"
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
+            </div>
 
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Reason</label>
-            <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Welcome bonus"
-              className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
-          </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Reason</label>
+              <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Welcome bonus"
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary" />
+            </div>
 
-          <button onClick={handleAdjust}
-            disabled={busy || !selectedUser || !amount || !reason.trim() || isNaN(parseInt(amount)) || parseInt(amount) === 0}
-            className="w-full min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-all disabled:opacity-60">
-            {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Apply Adjustment'}
-          </button>
+            <button onClick={handleAdjust}
+              disabled={busy || !iCanAdjustTokensNow || !selectedUser || !amount || !reason.trim() || isNaN(parseInt(amount)) || parseInt(amount) === 0}
+              className="w-full min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-all disabled:opacity-60">
+              {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Apply Adjustment'}
+            </button>
+          </div>
         </div>
 
         {/* Earn rates */}
@@ -225,7 +240,8 @@ export default function AdminTokensPage() {
         </div>
       </div>
 
-      {/* Monthly prize distribution */}
+      {/* Monthly prize distribution — super_admin only */}
+      {iCanDistributePrize && (
       <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
@@ -242,8 +258,9 @@ export default function AdminTokensPage() {
           Preview & Distribute
         </button>
       </div>
+      )}
 
-      {prizeModalOpen && (
+      {iCanDistributePrize && prizeModalOpen && (
         <Modal title="🏆 Distribute Monthly Prize" onClose={() => !distributing && setPrizeModalOpen(false)}>
           {alreadyDistributed ? (
             <p className="text-sm text-foreground/80">This month&rsquo;s prize has already been distributed.</p>

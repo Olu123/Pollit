@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Search, Lock } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
+import { canModerate } from '@/lib/adminPermissions'
 
 interface AdminPoll {
   id: string
@@ -28,6 +30,9 @@ const EXTEND_PRESETS = [1, 3, 7, 30] as const
 const CATEGORIES = ['All', 'Politics', 'Sports', 'Entertainment', 'Business', 'Lifestyle']
 
 export default function AdminPollsPage() {
+  const { profile } = useAuth()
+  const readOnly = !canModerate(profile)
+
   const [polls,      setPolls]      = useState<AdminPoll[]>([])
   const [loading,    setLoading]    = useState(true)
   const [search,     setSearch]     = useState('')
@@ -113,6 +118,12 @@ export default function AdminPollsPage() {
         <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
       </div>
 
+      {readOnly && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2.5">
+          <Lock size={12} className="shrink-0" /> Your role has read-only access to moderation actions here.
+        </p>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative">
@@ -186,10 +197,10 @@ export default function AdminPollsPage() {
                         <div className="flex gap-1.5 flex-wrap">
                           {!isDeleted && (
                             <>
-                              <Btn disabled={isBusy} onClick={() => rpc('admin_toggle_hot_take', { p_poll_id: p.id }, p.is_hot_take ? 'Hot Take removed.' : 'Marked as Hot Take.', p.id)}>
+                              <Btn disabled={isBusy || readOnly} onClick={() => rpc('admin_toggle_hot_take', { p_poll_id: p.id }, p.is_hot_take ? 'Hot Take removed.' : 'Marked as Hot Take.', p.id)}>
                                 {p.is_hot_take ? '−🔥' : '+🔥'}
                               </Btn>
-                              <Btn disabled={isBusy} onClick={() => rpc('admin_toggle_pin', { p_poll_id: p.id }, p.is_pinned ? 'Poll unpinned.' : 'Poll pinned.', p.id)}>
+                              <Btn disabled={isBusy || readOnly} onClick={() => rpc('admin_toggle_pin', { p_poll_id: p.id }, p.is_pinned ? 'Poll unpinned.' : 'Poll pinned.', p.id)}>
                                 {p.is_pinned ? 'Unpin' : 'Pin'}
                               </Btn>
                               {p.is_challenge && !p.challenge_distributed && (
@@ -198,11 +209,11 @@ export default function AdminPollsPage() {
                                 </Btn>
                               )}
                               <ExtendControl pollId={p.id} busy={isBusy} onExtend={(days) => extendPoll(p.id, days)} />
-                              <Btn disabled={isBusy} color="red" onClick={() => rpc('admin_delete_poll', { p_poll_id: p.id }, 'Poll deleted.', p.id)}>Delete</Btn>
+                              <Btn disabled={isBusy || readOnly} color="red" onClick={() => rpc('admin_delete_poll', { p_poll_id: p.id }, 'Poll deleted.', p.id)}>Delete</Btn>
                             </>
                           )}
                           {isDeleted && (
-                            <Btn disabled={isBusy} color="green" onClick={() => rpc('admin_restore_poll', { p_poll_id: p.id }, 'Poll restored.', p.id)}>Restore</Btn>
+                            <Btn disabled={isBusy || readOnly} color="green" onClick={() => rpc('admin_restore_poll', { p_poll_id: p.id }, 'Poll restored.', p.id)}>Restore</Btn>
                           )}
                           {isBusy && <Loader2 size={14} className="animate-spin text-muted-foreground self-center" />}
                         </div>

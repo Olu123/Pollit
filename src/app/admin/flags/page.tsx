@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Loader2, X, ShieldAlert, Search } from 'lucide-react'
+import { Loader2, X, ShieldAlert, Search, Lock } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
+import { canModerate } from '@/lib/adminPermissions'
 
 interface Flag {
   id: string
@@ -61,6 +63,9 @@ function accountAge(flag: Flag): string {
 }
 
 export default function AdminFlagsPage() {
+  const { profile } = useAuth()
+  const readOnly = !canModerate(profile)
+
   const [flags, setFlags] = useState<Flag[]>([])
   const [polls, setPolls] = useState<FlaggedPoll[]>([])
   const [loading, setLoading] = useState(true)
@@ -213,6 +218,12 @@ export default function AdminFlagsPage() {
         <button onClick={load} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Refresh</button>
       </div>
 
+      {readOnly && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2.5">
+          <Lock size={12} className="shrink-0" /> Your role has read-only access here.
+        </p>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Unresolved flags" value={unresolved.length} accent="text-[#DC2626]" />
@@ -257,11 +268,11 @@ export default function AdminFlagsPage() {
       {checked.size > 0 && (
         <div className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-2.5 sticky top-16 z-20">
           <span className="text-sm font-semibold text-foreground">{checked.size} selected</span>
-          <button onClick={bulkDismiss} disabled={busy}
+          <button onClick={bulkDismiss} disabled={busy || readOnly}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted text-foreground hover:bg-border disabled:opacity-60">
             Dismiss all
           </button>
-          <button onClick={bulkSuspend} disabled={busy}
+          <button onClick={bulkSuspend} disabled={busy || readOnly}
             className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#DC2626] text-white hover:brightness-95 disabled:opacity-60">
             Suspend all
           </button>
@@ -358,9 +369,9 @@ export default function AdminFlagsPage() {
                   <Link href={`/polls/${p.id}`} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted text-foreground hover:bg-border">View</Link>
                   <button onClick={() => runCoordinationCheck(p.id)} disabled={busy}
                     className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-muted text-foreground hover:bg-border disabled:opacity-60">Re-check</button>
-                  <button onClick={() => clearPollFlag(p.id)} disabled={busy}
+                  <button onClick={() => clearPollFlag(p.id)} disabled={busy || readOnly}
                     className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-60">Clear flag</button>
-                  <button onClick={() => deletePoll(p.id)} disabled={busy}
+                  <button onClick={() => deletePoll(p.id)} disabled={busy || readOnly}
                     className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#DC2626] text-white hover:brightness-95 disabled:opacity-60">Delete</button>
                 </div>
               </div>
@@ -395,11 +406,11 @@ export default function AdminFlagsPage() {
               <Link href="/admin/polls" className="text-xs font-semibold px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-border">View polls</Link>
               {!selected.resolved && (
                 <>
-                  <button onClick={() => resolveFlag(selected.id)} disabled={busy}
+                  <button onClick={() => resolveFlag(selected.id)} disabled={busy || readOnly}
                     className="text-xs font-semibold px-3 py-2 rounded-xl bg-muted text-foreground hover:bg-border disabled:opacity-60">Dismiss</button>
-                  <button onClick={() => warnUser(selected)} disabled={busy}
+                  <button onClick={() => warnUser(selected)} disabled={busy || readOnly}
                     className="text-xs font-semibold px-3 py-2 rounded-xl bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-60">Warn user</button>
-                  <button onClick={() => suspendUser(selected)} disabled={busy}
+                  <button onClick={() => suspendUser(selected)} disabled={busy || readOnly}
                     className="text-xs font-bold px-3 py-2 rounded-xl bg-[#DC2626] text-white hover:brightness-95 disabled:opacity-60">Suspend user</button>
                 </>
               )}

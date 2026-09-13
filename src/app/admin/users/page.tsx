@@ -4,6 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Loader2, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import AmbassadorBadge from '@/components/AmbassadorBadge'
+import RoleBadge from '@/components/RoleBadge'
+import { useAuth } from '@/components/AuthProvider'
+import { canAssignRoles, canModerate, canAdjustTokensNow } from '@/lib/adminPermissions'
+import type { AdminRole } from '@/lib/types'
 
 interface AdminUser {
   id: string
@@ -14,12 +18,24 @@ interface AdminUser {
   is_suspended: boolean
   is_ambassador: boolean
   ambassador_university: string | null
+  admin_role: AdminRole | null
+  token_permission_expires_at: string | null
   created_at: string
   poll_count: number
   vote_count: number
 }
 
 type AmbassadorFilter = 'all' | 'ambassadors' | 'non_ambassadors'
+const ROLE_OPTIONS: { value: AdminRole | ''; label: string }[] = [
+  { value: '',            label: 'No admin role' },
+  { value: 'support',     label: 'Support (read-only)' },
+  { value: 'moderator',   label: 'Moderator' },
+  { value: 'super_admin', label: 'Super Admin' },
+]
+
+function hasActiveTokenWindow(u: Pick<AdminUser, 'token_permission_expires_at'>): boolean {
+  return !!u.token_permission_expires_at && new Date(u.token_permission_expires_at).getTime() > Date.now()
+}
 
 export default function AdminUsersPage() {
   const [users,   setUsers]   = useState<AdminUser[]>([])
@@ -36,8 +52,17 @@ export default function AdminUsersPage() {
   const [suspendReason, setSuspendReason] = useState('')
   const [ambassadorModal, setAmbassadorModal] = useState<{ userId: string; username: string } | null>(null)
   const [ambassadorUniversity, setAmbassadorUniversity] = useState('')
+  const [roleModal, setRoleModal] = useState<{ userId: string; username: string } | null>(null)
+  const [roleChoice, setRoleChoice] = useState<AdminRole | ''>('')
+  const [windowModal, setWindowModal] = useState<{ userId: string; username: string } | null>(null)
+  const [windowHours, setWindowHours] = useState('24')
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
+
+  const { profile: viewerProfile } = useAuth()
+  const iCanAssignRoles = canAssignRoles(viewerProfile)
+  const iCanModerate    = canModerate(viewerProfile)
+  const iCanAdjustTokensNow = canAdjustTokensNow(viewerProfile)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -82,11 +107,31 @@ export default function AdminUsersPage() {
     load()
   }
 
-  async function toggleAdmin(userId: string) {
+  async function setRole(userId: string, role: AdminRole | '') {
     setBusy(true)
-    await supabase.rpc('admin_toggle_admin', { p_user_id: userId })
+    const { error } = await supabase.rpc('admin_set_role', { p_user_id: userId, p_role: role || null })
     setBusy(false)
-    showToast('Admin status updated.')
+    setRoleModal(null)
+    if (error) { showToast(error.message); return }
+    showToast(role ? `Role set to ${role.replace('_', ' ')}.` : 'Admin role removed.')
+    load()
+  }
+
+  async function grantTokenWindow(userId: string, hours: number) {
+    setBusy(true)
+    const { error } = await supabase.rpc('admin_grant_token_window', { p_user_id: userId, p_hours: hours })
+    setBusy(false)
+    setWindowModal(null)
+    if (error) { showToast(error.message); return }
+    showToast(`Token access granted for ${hours}h.`)
+    load()
+  }
+
+  async function revokeTokenWindow(userId: string) {
+    setBusy(true)
+    await supabase.rpc('admin_revoke_token_window', { p_user_id: userId })
+    setBusy(false)
+    showToast('Token access window revoked.')
     load()
   }
 
@@ -193,8 +238,11 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {u.is_admin && (
-                            <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">Admin</span>
+                          <RoleBadge role={u.admin_role} />
+                          {hasActiveTokenWindow(u) && (
+                            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" title={new Date(u.token_permission_expires_at!).toLocaleString('en-NG')}>
+                              🔓 Token access
+                            </span>
                           )}
                           {u.is_suspended ? (
                             <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Suspended</span>
@@ -211,42 +259,69 @@ export default function AdminUsersPage() {
                       <tr key={`${u.id}-exp`} className="border-b border-border bg-muted/20">
                         <td colSpan={8} className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            {u.is_suspended ? (
-                              <ActionBtn onClick={() => unsuspend(u.id)} disabled={busy} color="green">Unsuspend</ActionBtn>
-                            ) : (
-                              <ActionBtn onClick={() => { setSuspendModal({ userId: u.id, username: u.username ?? u.id }); setSuspendReason('') }} disabled={busy} color="red">Suspend</ActionBtn>
+                            {iCanModerate && (
+                              u.is_suspended ? (
+                                <ActionBtn onClick={() => unsuspend(u.id)} disabled={busy} color="green">Unsuspend</ActionBtn>
+                              ) : (
+                                <ActionBtn onClick={() => { setSuspendModal({ userId: u.id, username: u.username ?? u.id }); setSuspendReason('') }} disabled={busy} color="red">Suspend</ActionBtn>
+                              )
                             )}
-                            <ActionBtn onClick={() => toggleAdmin(u.id)} disabled={busy} color="default">
-                              {u.is_admin ? 'Remove Admin' : 'Make Admin'}
-                            </ActionBtn>
-                            <ActionBtn
-                              onClick={() => { setTokenModal({ userId: u.id, username: u.username ?? u.id }); setTokenAmt(''); setTokenReason('') }}
-                              disabled={busy}
-                              color="default"
-                            >
-                              Adjust Tokens
-                            </ActionBtn>
-                            {u.is_ambassador ? (
-                              <>
-                                <ActionBtn
-                                  onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity(u.ambassador_university ?? '') }}
-                                  disabled={busy}
-                                  color="default"
-                                >
-                                  Edit University
-                                </ActionBtn>
-                                <ActionBtn onClick={() => setAmbassador(u.id, false, '')} disabled={busy} color="red">
-                                  Remove Ambassador
-                                </ActionBtn>
-                              </>
-                            ) : (
+                            {iCanAssignRoles && (
                               <ActionBtn
-                                onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity('') }}
+                                onClick={() => { setRoleModal({ userId: u.id, username: u.username ?? u.id }); setRoleChoice(u.admin_role ?? '') }}
                                 disabled={busy}
-                                color="green"
+                                color="default"
                               >
-                                🎓 Make Ambassador
+                                Manage Role
                               </ActionBtn>
+                            )}
+                            {iCanAssignRoles && (u.admin_role === 'support' || u.admin_role === 'super_admin') && (
+                              hasActiveTokenWindow(u) ? (
+                                <ActionBtn onClick={() => revokeTokenWindow(u.id)} disabled={busy} color="red">
+                                  Revoke Token Access
+                                </ActionBtn>
+                              ) : (
+                                <ActionBtn
+                                  onClick={() => { setWindowModal({ userId: u.id, username: u.username ?? u.id }); setWindowHours('24') }}
+                                  disabled={busy}
+                                  color="green"
+                                >
+                                  🔓 Grant Token Access
+                                </ActionBtn>
+                              )
+                            )}
+                            {iCanAdjustTokensNow && (
+                              <ActionBtn
+                                onClick={() => { setTokenModal({ userId: u.id, username: u.username ?? u.id }); setTokenAmt(''); setTokenReason('') }}
+                                disabled={busy}
+                                color="default"
+                              >
+                                Adjust Tokens
+                              </ActionBtn>
+                            )}
+                            {iCanAssignRoles && (
+                              u.is_ambassador ? (
+                                <>
+                                  <ActionBtn
+                                    onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity(u.ambassador_university ?? '') }}
+                                    disabled={busy}
+                                    color="default"
+                                  >
+                                    Edit University
+                                  </ActionBtn>
+                                  <ActionBtn onClick={() => setAmbassador(u.id, false, '')} disabled={busy} color="red">
+                                    Remove Ambassador
+                                  </ActionBtn>
+                                </>
+                              ) : (
+                                <ActionBtn
+                                  onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity('') }}
+                                  disabled={busy}
+                                  color="green"
+                                >
+                                  🎓 Make Ambassador
+                                </ActionBtn>
+                              )
                             )}
                             <span className="text-xs text-muted-foreground self-center">
                               ID: <code className="font-mono">{u.id.slice(0, 8)}…</code>
@@ -351,6 +426,68 @@ export default function AdminUsersPage() {
                 className="flex-1 min-h-[44px] rounded-xl bg-green-600 text-white text-sm font-bold hover:brightness-95 transition-all disabled:opacity-60"
               >
                 {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {/* Role modal */}
+      {roleModal && (
+        <Modal title={`Manage role — @${roleModal.username}`} onClose={() => setRoleModal(null)}>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1">Admin role</label>
+              <select
+                value={roleChoice}
+                onChange={e => setRoleChoice(e.target.value as AdminRole | '')}
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
+              >
+                {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                super_admin: full access. moderator: flags, reports, suspensions, poll moderation. support: read-only, plus token adjustments only while a token access window is open.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setRoleModal(null)} className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors">Cancel</button>
+              <button
+                onClick={() => setRole(roleModal.userId, roleChoice)}
+                disabled={busy}
+                className="flex-1 min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-all disabled:opacity-60"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Token access window modal */}
+      {windowModal && (
+        <Modal title={`Grant temporary token access — @${windowModal.username}`} onClose={() => setWindowModal(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              While this window is open, this user can adjust other users&rsquo; tokens. It expires automatically — no standing access.
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1">Duration (hours, max 168 / 1 week)</label>
+              <input
+                type="number"
+                min={1}
+                max={168}
+                value={windowHours}
+                onChange={e => setWindowHours(e.target.value)}
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setWindowModal(null)} className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors">Cancel</button>
+              <button
+                onClick={() => grantTokenWindow(windowModal.userId, parseInt(windowHours))}
+                disabled={busy || !windowHours || isNaN(parseInt(windowHours)) || parseInt(windowHours) <= 0 || parseInt(windowHours) > 168}
+                className="flex-1 min-h-[44px] rounded-xl bg-green-600 text-white text-sm font-bold hover:brightness-95 transition-all disabled:opacity-60"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Grant Access'}
               </button>
             </div>
           </div>

@@ -5,6 +5,8 @@ export type PollCategory =
   | 'Business'
   | 'Lifestyle'
 
+export type AdminRole = 'super_admin' | 'moderator' | 'support'
+
 export interface Profile {
   id: string
   username: string | null
@@ -24,6 +26,8 @@ export interface Profile {
   referred_by: string | null
   referral_count: number
   is_admin: boolean
+  admin_role: AdminRole | null
+  token_permission_expires_at: string | null
   is_ambassador: boolean
   ambassador_university: string | null
   first_vote_at: string | null

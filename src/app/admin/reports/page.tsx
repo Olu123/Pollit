@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, X, Lock } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
+import { canModerate } from '@/lib/adminPermissions'
 
 interface Report {
   id: string
@@ -18,6 +20,9 @@ interface Report {
 const STATUSES = ['all', 'open', 'dismissed'] as const
 
 export default function AdminReportsPage() {
+  const { profile } = useAuth()
+  const readOnly = !canModerate(profile)
+
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState<string>('open')
@@ -104,6 +109,12 @@ export default function AdminReportsPage() {
         <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
       </div>
 
+      {readOnly && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2.5">
+          <Lock size={12} className="shrink-0" /> Your role has read-only access here.
+        </p>
+      )}
+
       <div className="flex gap-2 flex-wrap">
         {STATUSES.map(s => (
           <button key={s} onClick={() => setFilter(s)}
@@ -181,16 +192,16 @@ export default function AdminReportsPage() {
             </div>
             {selected.status === 'open' && (
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                <button onClick={() => dismiss(selected.id)} disabled={busy}
+                <button onClick={() => dismiss(selected.id)} disabled={busy || readOnly}
                   className="w-full min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors disabled:opacity-60">
                   {busy ? <Loader2 size={15} className="animate-spin mx-auto" /> : 'Dismiss Report'}
                 </button>
-                <button onClick={() => deleteContent(selected)} disabled={busy}
+                <button onClick={() => deleteContent(selected)} disabled={busy || readOnly}
                   className="w-full min-h-[44px] rounded-xl bg-amber-100 text-amber-800 text-sm font-semibold hover:bg-amber-200 transition-colors disabled:opacity-60">
                   Delete Content + Close
                 </button>
                 {selected.poll_id && (
-                  <button onClick={() => suspendReportedUser(selected)} disabled={busy}
+                  <button onClick={() => suspendReportedUser(selected)} disabled={busy || readOnly}
                     className="w-full min-h-[44px] rounded-xl bg-[#DC2626] text-white text-sm font-bold hover:brightness-95 transition-all disabled:opacity-60">
                     Suspend Creator + Close
                   </button>
