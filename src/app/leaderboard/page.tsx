@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import { Star, BarChart2, CheckSquare, Trophy, Gift } from 'lucide-react'
+import { Star, BarChart2, CheckSquare, Trophy, Gift, GraduationCap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { T } from '@/components/LanguageProvider'
 import ViewTracker from '@/components/ViewTracker'
+import AmbassadorBadge from '@/components/AmbassadorBadge'
 import type { StringKey } from '@/lib/i18n'
 
 export const metadata = {
@@ -14,7 +15,7 @@ export const revalidate = 300 // re-fetch at most every 5 minutes
 
 // ── Types ─────────────────────────────────────────────────────
 
-type TabKey = 'overall' | 'voters' | 'creators' | 'monthly'
+type TabKey = 'overall' | 'voters' | 'creators' | 'monthly' | 'ambassadors'
 
 interface LeaderboardEntry {
   id: string
@@ -22,6 +23,7 @@ interface LeaderboardEntry {
   points: number
   votes_cast: number
   polls_created: number
+  is_ambassador: boolean
 }
 
 interface MonthlyEntry {
@@ -29,6 +31,7 @@ interface MonthlyEntry {
   user_id: string
   username: string | null
   monthly_tokens: number
+  ambassador_university?: string | null
 }
 
 interface MonthlyPrize {
@@ -44,10 +47,11 @@ const PRIZE_TIERS_NGN = [20000, 10000, 7000, 5000, 3000, 500, 500, 500, 500, 500
 // ── Helpers ───────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'overall'  as TabKey, labelKey: 'lb.overall'     as StringKey, icon: Star,        hintKey: 'lb.hintOverall'  as StringKey },
-  { key: 'voters'   as TabKey, labelKey: 'lb.topVoters'   as StringKey, icon: CheckSquare, hintKey: 'lb.hintVoters'   as StringKey },
-  { key: 'creators' as TabKey, labelKey: 'lb.topCreators' as StringKey, icon: BarChart2,   hintKey: 'lb.hintCreators' as StringKey },
-  { key: 'monthly'  as TabKey, labelKey: 'lb.monthly'     as StringKey, icon: Gift,        hintKey: 'lb.hintMonthly'  as StringKey },
+  { key: 'overall'     as TabKey, labelKey: 'lb.overall'        as StringKey, icon: Star,          hintKey: 'lb.hintOverall'     as StringKey },
+  { key: 'voters'      as TabKey, labelKey: 'lb.topVoters'      as StringKey, icon: CheckSquare,   hintKey: 'lb.hintVoters'      as StringKey },
+  { key: 'creators'    as TabKey, labelKey: 'lb.topCreators'    as StringKey, icon: BarChart2,     hintKey: 'lb.hintCreators'    as StringKey },
+  { key: 'monthly'     as TabKey, labelKey: 'lb.monthly'        as StringKey, icon: Gift,          hintKey: 'lb.hintMonthly'     as StringKey },
+  { key: 'ambassadors' as TabKey, labelKey: 'lb.ambassadors'    as StringKey, icon: GraduationCap, hintKey: 'lb.hintAmbassadors' as StringKey },
 ] as const
 
 function daysUntilEndOfMonth(): number {
@@ -89,7 +93,7 @@ function fmtNum(n: number): string {
 async function getLeaderboardData(): Promise<LeaderboardEntry[]> {
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, username, points')
+    .select('id, username, points, is_ambassador')
     .gt('points', 0)
     .order('points', { ascending: false })
     .limit(50)
@@ -132,6 +136,15 @@ async function getMonthlyLeaderboard(): Promise<MonthlyEntry[]> {
   return data ?? []
 }
 
+async function getAmbassadorLeaderboard(): Promise<MonthlyEntry[]> {
+  const { data, error } = await supabase.rpc('ambassador_leaderboard')
+  if (error) {
+    console.error('[Leaderboard] ambassador_leaderboard fetch:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
 async function getMonthlyPrize(): Promise<MonthlyPrize | null> {
   const { data, error } = await supabase.rpc('get_monthly_prize')
   if (error || !data || !data.month) return null
@@ -146,13 +159,14 @@ export default async function LeaderboardPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { tab: rawTab = 'overall' } = await searchParams
-  const tab: TabKey = (['overall', 'voters', 'creators', 'monthly'] as const).includes(rawTab as TabKey)
+  const tab: TabKey = (['overall', 'voters', 'creators', 'monthly', 'ambassadors'] as const).includes(rawTab as TabKey)
     ? (rawTab as TabKey)
     : 'overall'
+  const isMonthlyStyleTab = tab === 'monthly' || tab === 'ambassadors'
 
   const [entries, monthlyEntries, monthlyPrize] = await Promise.all([
-    tab === 'monthly' ? Promise.resolve([]) : getLeaderboardData(),
-    tab === 'monthly' ? getMonthlyLeaderboard() : Promise.resolve([]),
+    isMonthlyStyleTab ? Promise.resolve([]) : getLeaderboardData(),
+    tab === 'monthly' ? getMonthlyLeaderboard() : tab === 'ambassadors' ? getAmbassadorLeaderboard() : Promise.resolve([]),
     getMonthlyPrize(),
   ])
   const sorted = sortEntries(entries, tab)
@@ -174,13 +188,15 @@ export default async function LeaderboardPage({
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             <T k={activeTab.hintKey} /> ·{' '}
-            {tab === 'monthly' ? monthlyEntries.length : sorted.length} <T k="lb.rankedUsers" />
+            {isMonthlyStyleTab ? monthlyEntries.length : sorted.length} <T k="lb.rankedUsers" />
           </p>
         </div>
       </div>
 
       {/* Monthly prize banner */}
-      <MonthlyPrizeBanner monthName={monthName} prize={monthlyPrize} daysLeft={daysUntilEndOfMonth()} />
+      {tab === 'monthly' && (
+        <MonthlyPrizeBanner monthName={monthName} prize={monthlyPrize} daysLeft={daysUntilEndOfMonth()} />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-0.5">
@@ -204,13 +220,13 @@ export default async function LeaderboardPage({
       </div>
 
       {/* Board */}
-      {tab === 'monthly' ? (
+      {isMonthlyStyleTab ? (
         monthlyEntries.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="flex flex-col gap-2">
             {monthlyEntries.map((entry) => (
-              <MonthlyLeaderboardRow key={entry.user_id} entry={entry} />
+              <MonthlyLeaderboardRow key={entry.user_id} entry={entry} showPrizeTier={tab === 'monthly'} isAmbassadorTab={tab === 'ambassadors'} />
             ))}
           </div>
         )
@@ -284,8 +300,9 @@ function LeaderboardRow({
 
       {/* Name + stats */}
       <div className="flex-1 min-w-0">
-        <p className="font-bold text-foreground text-sm truncate leading-tight">
+        <p className="font-bold text-foreground text-sm truncate leading-tight flex items-center gap-1.5">
           {displayName}
+          <AmbassadorBadge isAmbassador={entry.is_ambassador} />
         </p>
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           <span className={`flex items-center gap-1 ${tab === 'voters' ? 'text-primary font-semibold' : ''}`}>
@@ -365,13 +382,19 @@ function MonthlyPrizeBanner({
   )
 }
 
-function MonthlyLeaderboardRow({ entry }: { entry: MonthlyEntry }) {
+function MonthlyLeaderboardRow({
+  entry, showPrizeTier = true, isAmbassadorTab = false,
+}: {
+  entry: MonthlyEntry
+  showPrizeTier?: boolean
+  isAmbassadorTab?: boolean
+}) {
   const medal = entry.rank <= 3 ? MEDAL[entry.rank - 1] : null
   const accentBorder = RANK_BORDER[entry.rank] ?? ''
   const displayName = entry.username ? `@${entry.username}` : 'Anonymous'
   const bg = avatarColor(entry.user_id)
   const initials = getInitials(entry.username)
-  const tierNgn = PRIZE_TIERS_NGN[entry.rank - 1]
+  const tierNgn = showPrizeTier ? PRIZE_TIERS_NGN[entry.rank - 1] : undefined
 
   return (
     <div className={`bg-card border rounded-2xl px-4 py-3.5 flex items-center gap-3 transition-shadow hover:shadow-sm ${accentBorder}`}>
@@ -390,7 +413,13 @@ function MonthlyLeaderboardRow({ entry }: { entry: MonthlyEntry }) {
         {initials}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-bold text-foreground text-sm truncate leading-tight">{displayName}</p>
+        <p className="font-bold text-foreground text-sm truncate leading-tight flex items-center gap-1.5">
+          {displayName}
+          <AmbassadorBadge isAmbassador={isAmbassadorTab} />
+        </p>
+        {isAmbassadorTab && entry.ambassador_university && (
+          <p className="text-xs text-muted-foreground mt-1 truncate">{entry.ambassador_university}</p>
+        )}
         {tierNgn && (
           <p className="text-xs text-amber-600 font-semibold mt-1">≈ ₦{tierNgn.toLocaleString()}</p>
         )}

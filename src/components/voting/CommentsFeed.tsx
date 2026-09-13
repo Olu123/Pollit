@@ -4,6 +4,7 @@ import { Gift, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { useLanguage } from '@/components/LanguageProvider'
 import ReportButton from '@/components/ReportButton'
+import AmbassadorBadge from '@/components/AmbassadorBadge'
 import CommentReactions from './CommentReactions'
 import TipButton from './TipButton'
 import type { PollComment } from '@/lib/types'
@@ -70,6 +71,7 @@ export default function CommentsFeed({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-foreground truncate">{handle}</span>
+                  <AmbassadorBadge isAmbassador={c.is_ambassador} />
                   <span className="text-xs text-muted-foreground shrink-0">{timeAgo(c.created_at)}</span>
                   <span className="ml-auto shrink-0 flex items-center">
                     <TipButton

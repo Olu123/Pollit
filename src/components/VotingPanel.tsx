@@ -624,6 +624,8 @@ export default function VotingPanel({ poll: initialPoll }: { poll: Poll }) {
         totalVotes={total}
         category={poll.category}
         createdAt={poll.created_at}
+        creatorUsername={poll.profile?.username ?? null}
+        creatorIsAmbassador={poll.profile?.is_ambassador ?? false}
       />
 
       {/* Comments feed */}

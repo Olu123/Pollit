@@ -6,6 +6,7 @@ import { generateVerdict, verdictCopyText, type VerdictOption } from '@/lib/verd
 import { shareMessages, whatsappHref } from '@/lib/share'
 import { analytics } from '@/lib/analytics'
 import { useToast } from './ToastProvider'
+import AmbassadorBadge from './AmbassadorBadge'
 
 export default function NigerianVerdict({
   pollId,
@@ -14,6 +15,8 @@ export default function NigerianVerdict({
   totalVotes,
   category,
   createdAt,
+  creatorUsername = null,
+  creatorIsAmbassador = false,
 }: {
   pollId: string
   question: string
@@ -21,6 +24,8 @@ export default function NigerianVerdict({
   totalVotes: number
   category: string
   createdAt: string
+  creatorUsername?: string | null
+  creatorIsAmbassador?: boolean
 }) {
   const { showToast } = useToast()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -74,6 +79,13 @@ export default function NigerianVerdict({
         <p className="text-sm text-muted-foreground">
           Poll: &ldquo;{question}&rdquo;
         </p>
+
+        {creatorIsAmbassador && creatorUsername && (
+          <div className="flex items-center gap-1.5 -mt-2">
+            <span className="text-xs text-muted-foreground">by @{creatorUsername}</span>
+            <AmbassadorBadge isAmbassador={creatorIsAmbassador} />
+          </div>
+        )}
 
         <div className="h-px bg-border" />
 

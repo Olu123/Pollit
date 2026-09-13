@@ -24,6 +24,8 @@ export interface Profile {
   referred_by: string | null
   referral_count: number
   is_admin: boolean
+  is_ambassador: boolean
+  ambassador_university: string | null
   first_vote_at: string | null
   first_poll_at: string | null
   flag_count: number
@@ -89,6 +91,8 @@ export interface PollComment {
   comment: string
   created_at: string
   username: string | null
+  is_ambassador: boolean
+  ambassador_university: string | null
   agree_count: number
   disagree_count: number
   tips_received: number

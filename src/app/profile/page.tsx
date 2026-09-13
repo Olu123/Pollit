@@ -69,6 +69,8 @@ export default function ProfilePage() {
   const [newsletter, setNewsletter] = useState(false)
   const [notifyDailySummary, setNotifyDailySummary]   = useState(true)
   const [notifyExpiryReminder, setNotifyExpiryReminder] = useState(true)
+  const [isAmbassador, setIsAmbassador] = useState(false)
+  const [ambassadorUniversity, setAmbassadorUniversity] = useState('')
 
   // Read-only / derived
   const [stats, setStats]   = useState<Stats>({ points: 0, pollsCreated: 0, votesCast: 0 })
@@ -108,6 +110,8 @@ export default function ProfilePage() {
       setNewsletter(!!profile.newsletter_opt_in)
       setNotifyDailySummary(profile.notify_daily_summary !== false)
       setNotifyExpiryReminder(profile.notify_expiry_reminder !== false)
+      setIsAmbassador(!!profile.is_ambassador)
+      setAmbassadorUniversity(profile.ambassador_university ?? '')
       setStats({
         points:       profile.points ?? 0,
         pollsCreated: polls.count ?? 0,
@@ -213,6 +217,15 @@ if (!cleanUsername) {
           </div>
         </div>
       </div>
+
+      {isAmbassador && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
+          <p className="text-sm font-bold text-green-700">
+            🎓 WePollit Campus Ambassador
+            {ambassadorUniversity && <><br />{ambassadorUniversity}</>}
+          </p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

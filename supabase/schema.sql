@@ -2812,6 +2812,92 @@ end;
 $$;
 grant execute on function public.extend_poll(uuid, integer) to authenticated;
 
+-- ── Campus Ambassadors ────────────────────────────────────────
+alter table public.profiles add column if not exists is_ambassador boolean not null default false;
+alter table public.profiles add column if not exists ambassador_university text;
+
+-- Extend admin_get_users with ambassador fields.
+create or replace function public.admin_get_users()
+returns table(
+  id                     uuid,
+  username               text,
+  email                  text,
+  points                 integer,
+  is_admin               boolean,
+  is_suspended           boolean,
+  is_ambassador          boolean,
+  ambassador_university  text,
+  created_at             timestamptz,
+  poll_count             bigint,
+  vote_count             bigint
+)
+language sql security definer set search_path = public
+as $$
+  select
+    p.id,
+    p.username,
+    coalesce(u.email, '') as email,
+    p.points,
+    coalesce(p.is_admin, false),
+    coalesce(p.is_suspended, false),
+    coalesce(p.is_ambassador, false),
+    p.ambassador_university,
+    p.created_at,
+    (select count(*) from polls where created_by = p.id and deleted_at is null)::bigint,
+    (select count(*) from votes where user_id = p.id)::bigint
+  from public.profiles p
+  left join auth.users u on u.id = p.id
+  order by p.created_at desc;
+$$;
+grant execute on function public.admin_get_users() to authenticated;
+
+-- ── RPC: admin_set_ambassador ─────────────────────────────────
+-- University is only kept when is_ambassador is turned on, so toggling a
+-- user off always clears any stale campus name.
+create or replace function public.admin_set_ambassador(p_user_id uuid, p_is_ambassador boolean, p_university text default null)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'not_authorized';
+  end if;
+
+  update profiles
+    set is_ambassador         = p_is_ambassador,
+        ambassador_university = case when p_is_ambassador then p_university else null end
+    where id = p_user_id;
+end;
+$$;
+grant execute on function public.admin_set_ambassador(uuid, boolean, text) to authenticated;
+
+-- ── RPC: ambassador_leaderboard ───────────────────────────────
+-- Same earned-tokens-only logic as monthly_leaderboard, scoped to campus
+-- ambassadors so universities can compete on a level board.
+create or replace function public.ambassador_leaderboard(
+  p_month int default extract(month from now())::int,
+  p_year  int default extract(year from now())::int
+)
+returns table(rank bigint, user_id uuid, username text, ambassador_university text, monthly_tokens bigint)
+language sql stable security definer set search_path = public as $$
+  select row_number() over (order by sum(t.amount) desc) as rank,
+         t.user_id,
+         max(p.username) as username,
+         max(p.ambassador_university) as ambassador_university,
+         sum(t.amount)::bigint as monthly_tokens
+  from token_transactions t
+  join profiles p on p.id = t.user_id
+  where extract(month from t.created_at) = p_month
+    and extract(year from t.created_at) = p_year
+    and t.amount > 0
+    and t.reason_type not in ('admin_adjustment', 'tip', 'monthly_prize')
+    and p.is_ambassador = true
+  group by t.user_id
+  order by monthly_tokens desc
+  limit 50;
+$$;
+grant execute on function public.ambassador_leaderboard(int, int) to anon, authenticated;
+
 -- ── RPC: cron_get_user_emails ────────────────────────────────
 -- Resolves poll creators' emails from auth.users for the daily-summary
 -- and expiry-reminder cron routes. Those routes run with no end-user

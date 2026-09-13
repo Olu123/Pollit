@@ -9,6 +9,7 @@ import type { StringKey } from '@/lib/i18n'
 import { SITE_DOMAIN as SITE } from '@/lib/site'
 import PollActionsMenu from './PollActionsMenu'
 import ReportButton from './ReportButton'
+import AmbassadorBadge from './AmbassadorBadge'
 
 function pollUrl(id: string) {
   return `https://${SITE}/polls/${id}`
@@ -134,6 +135,7 @@ export default function PollCard({ poll, index = 0 }: { poll: Poll; index?: numb
             {creator.slice(0, 2).toUpperCase()}
           </span>
           <span className="text-muted-foreground truncate">@{creator}</span>
+          <AmbassadorBadge isAmbassador={poll.profile?.is_ambassador} />
         </div>
       )}
 

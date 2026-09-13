@@ -16,7 +16,7 @@ export function useCommentsFeed(pollId: string, userId?: string) {
       .select(`
         id, user_id, comment, created_at,
         agree_count, disagree_count, tips_received,
-        profile:profiles!user_id ( username )
+        profile:profiles!user_id ( username, is_ambassador, ambassador_university )
       `)
       .eq('poll_id', pollId)
       .not('comment', 'is', null)
@@ -44,6 +44,8 @@ export function useCommentsFeed(pollId: string, userId?: string) {
         comment: row.comment,
         created_at: row.created_at,
         username: prof?.username ?? null,
+        is_ambassador: prof?.is_ambassador ?? false,
+        ambassador_university: prof?.ambassador_university ?? null,
         agree_count: row.agree_count ?? 0,
         disagree_count: row.disagree_count ?? 0,
         tips_received: row.tips_received ?? 0,

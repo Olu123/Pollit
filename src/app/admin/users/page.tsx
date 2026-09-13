@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Loader2, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import AmbassadorBadge from '@/components/AmbassadorBadge'
 
 interface AdminUser {
   id: string
@@ -11,16 +12,21 @@ interface AdminUser {
   points: number
   is_admin: boolean
   is_suspended: boolean
+  is_ambassador: boolean
+  ambassador_university: string | null
   created_at: string
   poll_count: number
   vote_count: number
 }
+
+type AmbassadorFilter = 'all' | 'ambassadors' | 'non_ambassadors'
 
 export default function AdminUsersPage() {
   const [users,   setUsers]   = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [search,  setSearch]  = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [ambassadorFilter, setAmbassadorFilter] = useState<AmbassadorFilter>('all')
 
   // Modal state for token adjustment
   const [tokenModal, setTokenModal] = useState<{ userId: string; username: string } | null>(null)
@@ -28,6 +34,8 @@ export default function AdminUsersPage() {
   const [tokenReason, setTokenReason] = useState('')
   const [suspendModal, setSuspendModal] = useState<{ userId: string; username: string } | null>(null)
   const [suspendReason, setSuspendReason] = useState('')
+  const [ambassadorModal, setAmbassadorModal] = useState<{ userId: string; username: string } | null>(null)
+  const [ambassadorUniversity, setAmbassadorUniversity] = useState('')
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -45,11 +53,16 @@ export default function AdminUsersPage() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = users.filter(u =>
-    !search ||
-    u.username?.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = users.filter(u => {
+    const matchesSearch = !search ||
+      u.username?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
+    const matchesAmbassador =
+      ambassadorFilter === 'all' ||
+      (ambassadorFilter === 'ambassadors' && u.is_ambassador) ||
+      (ambassadorFilter === 'non_ambassadors' && !u.is_ambassador)
+    return matchesSearch && matchesAmbassador
+  })
 
   async function suspend(userId: string, reason: string) {
     setBusy(true)
@@ -77,6 +90,16 @@ export default function AdminUsersPage() {
     load()
   }
 
+  async function setAmbassador(userId: string, isAmbassador: boolean, university: string) {
+    setBusy(true)
+    await supabase.rpc('admin_set_ambassador', { p_user_id: userId, p_is_ambassador: isAmbassador, p_university: university || null })
+    setBusy(false)
+    setAmbassadorModal(null)
+    setAmbassadorUniversity('')
+    showToast(isAmbassador ? 'User is now a Campus Ambassador.' : 'Campus Ambassador status removed.')
+    load()
+  }
+
   async function adjustTokens(userId: string, amount: number, reason: string) {
     setBusy(true)
     await supabase.rpc('admin_adjust_tokens', { p_user_id: userId, p_amount: amount, p_reason: reason })
@@ -101,15 +124,26 @@ export default function AdminUsersPage() {
         <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by username or email…"
-          className="w-full border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
-        />
+      {/* Search + filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by username or email…"
+            className="w-full border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <select
+          value={ambassadorFilter}
+          onChange={e => setAmbassadorFilter(e.target.value as AmbassadorFilter)}
+          className="border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
+        >
+          <option value="all">All users</option>
+          <option value="ambassadors">🎓 Ambassadors only</option>
+          <option value="non_ambassadors">Non-ambassadors</option>
+        </select>
       </div>
 
       {loading ? (
@@ -139,8 +173,14 @@ export default function AdminUsersPage() {
                       className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer"
                     >
                       <td className="py-3 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">@{u.username ?? '—'}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold text-foreground flex items-center gap-1.5">
+                            @{u.username ?? '—'}
+                            <AmbassadorBadge isAmbassador={u.is_ambassador} />
+                          </span>
+                          {u.is_ambassador && u.ambassador_university && (
+                            <span className="text-[11px] text-muted-foreground truncate max-w-[160px]">{u.ambassador_university}</span>
+                          )}
                           <span className="text-xs text-muted-foreground sm:hidden truncate max-w-[140px]">{u.email}</span>
                         </div>
                       </td>
@@ -186,6 +226,28 @@ export default function AdminUsersPage() {
                             >
                               Adjust Tokens
                             </ActionBtn>
+                            {u.is_ambassador ? (
+                              <>
+                                <ActionBtn
+                                  onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity(u.ambassador_university ?? '') }}
+                                  disabled={busy}
+                                  color="default"
+                                >
+                                  Edit University
+                                </ActionBtn>
+                                <ActionBtn onClick={() => setAmbassador(u.id, false, '')} disabled={busy} color="red">
+                                  Remove Ambassador
+                                </ActionBtn>
+                              </>
+                            ) : (
+                              <ActionBtn
+                                onClick={() => { setAmbassadorModal({ userId: u.id, username: u.username ?? u.id }); setAmbassadorUniversity('') }}
+                                disabled={busy}
+                                color="green"
+                              >
+                                🎓 Make Ambassador
+                              </ActionBtn>
+                            )}
                             <span className="text-xs text-muted-foreground self-center">
                               ID: <code className="font-mono">{u.id.slice(0, 8)}…</code>
                             </span>
@@ -261,6 +323,34 @@ export default function AdminUsersPage() {
                 className="flex-1 min-h-[44px] rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-all disabled:opacity-60"
               >
                 {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Ambassador modal */}
+      {ambassadorModal && (
+        <Modal title={`🎓 Campus Ambassador — @${ambassadorModal.username}`} onClose={() => setAmbassadorModal(null)}>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1">University</label>
+              <input
+                type="text"
+                value={ambassadorUniversity}
+                onChange={e => setAmbassadorUniversity(e.target.value)}
+                placeholder="e.g. University of Lagos"
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setAmbassadorModal(null)} className="flex-1 min-h-[44px] rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-border transition-colors">Cancel</button>
+              <button
+                onClick={() => setAmbassador(ambassadorModal.userId, true, ambassadorUniversity.trim())}
+                disabled={busy || !ambassadorUniversity.trim()}
+                className="flex-1 min-h-[44px] rounded-xl bg-green-600 text-white text-sm font-bold hover:brightness-95 transition-all disabled:opacity-60"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Save'}
               </button>
             </div>
           </div>

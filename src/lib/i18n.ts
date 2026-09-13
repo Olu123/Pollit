@@ -184,6 +184,8 @@ export const STRINGS = {
   'lb.browse':       { en: 'Browse Polls', pid: 'See Polls', hau: 'Binciko Zaɓe', yor: 'Ṣàwárí Àwọn Ìdìbò', ibo: 'Chọgharịa Ntuli Aka' },
   'lb.monthly':          { en: 'Monthly', pid: 'Monthly', hau: 'Na Wata-wata', yor: 'Oṣooṣù', ibo: 'Kwa ọnwa' },
   'lb.hintMonthly':      { en: 'Most tokens earned this month', pid: 'Who collect tokens pass dis month', hau: 'Mafi yawan token da aka samu wannan wata', yor: 'Àmì owó tó pọ̀ jùlọ tí a jèrè oṣù yìí', ibo: 'Mkpirisi kachasị e nwetara n\'ọnwa a' },
+  'lb.ambassadors':      { en: 'Ambassadors', pid: 'Ambassadors', hau: 'Jakadu', yor: 'Àwọn Aṣojú', ibo: 'Ndị Nnọchite Anya' },
+  'lb.hintAmbassadors':  { en: 'Campus ambassadors, ranked by tokens this month', pid: 'Campus ambassadors, wey dem rank by tokens dis month', hau: 'Jakadun harabar jami\'a, an jera bisa token wannan wata', yor: 'Àwọn aṣojú ilé-ìwé gíga, ìwọ̀nba nípasẹ̀ àmì owó oṣù yìí', ibo: 'Ndị nnọchite anya mahadum, edozie ha site na mkpirisi n\'ọnwa a' },
   'lb.prizeTitle':       { en: 'Prize Pool', pid: 'Prize Money', hau: 'Kuɗin Kyauta', yor: 'Owó Ẹ̀bùn', ibo: 'Ego Onyinye' },
   'lb.prizePoolUpForGrabs': { en: 'up for grabs! Top 10 users by tokens this month share the pool.', pid: 'dey ground make you carry! Top 10 wey collect tokens pass dis month go share the money.', hau: 'na jiran ku! Manyan mutane 10 masu token a wannan wata za su raba kuɗin.', yor: 'wà fún gbígbà! Àwọn ẹni 10 tó jèrè àmì owó jùlọ oṣù yìí ni yóò pín in.', ibo: 'dị maka ị nweta! Ndị mmadụ 10 kacha nweta mkpirisi n\'ọnwa a ga-ekesa ya.' },
   'lb.winnersAnnounced': { en: 'Winners announced!', pid: 'Winners don show!', hau: 'An sanar da masu nasara!', yor: 'A ti kéde àwọn olùborí!', ibo: 'Ekwuola ndị mmeri!' },
